@@ -81,7 +81,9 @@ public sealed partial class AssetManagementService
     public async Task<SpecialtyDetailDto> GetSpecialtyAsync(int id, CancellationToken cancellationToken)
     {
         var specialty = await GetSpecialtyEntityAsync(id, cancellationToken);
-        return ResponseMapper.ToSpecialtyDetail(specialty, specialty.Technicians.Count);
+        var technicianCount = await _context.TechnicianSpecialties.CountAsync(
+            relation => relation.SpecialtyId == id, cancellationToken);
+        return ResponseMapper.ToSpecialtyDetail(specialty, technicianCount);
     }
 
     public async Task<SpecialtyDetailDto> CreateSpecialtyAsync(

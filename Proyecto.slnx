@@ -3,5 +3,6 @@
   <Project Path="Proyecto.Domain/Proyecto.Domain.csproj" />
   <Project Path="Proyecto.Infraestructure/Proyecto.Infraestructure.csproj" />
   <Project Path="Proyecto.Shared/Proyecto.Shared.csproj" />
+  <Project Path="Proyecto.Tests/Proyecto.Tests.csproj" />
   <Project Path="Proyecto.WebAPI/Proyecto.WebAPI.csproj" />
 </Solution>

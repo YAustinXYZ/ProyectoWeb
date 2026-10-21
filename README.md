@@ -84,6 +84,7 @@ La migración inicializa 8 categorías, 8 ubicaciones, 10 proveedores, 10 activo
 ```powershell
 dotnet restore .\Proyecto.slnx
 dotnet build .\Proyecto.slnx
+dotnet test .\Proyecto.slnx
 dotnet ef migrations list `
   --project .\Proyecto.Infraestructure\Proyecto.Infraestructure.csproj `
   --startup-project .\Proyecto.WebAPI\Proyecto.WebAPI.csproj

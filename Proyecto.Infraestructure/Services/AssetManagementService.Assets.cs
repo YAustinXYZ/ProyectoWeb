@@ -104,7 +104,10 @@ public sealed partial class AssetManagementService
         var asset = await _context.Assets.FirstOrDefaultAsync(item => item.Id == id && item.IsActive, cancellationToken)
             ?? throw new EntityNotFoundException($"No existe el activo activo con id {id}.");
         var hasOpenOrder = await _context.MaintenanceOrders
-            .AnyAsync(order => order.AssetId == id && order.Status == "Solicitada", cancellationToken);
+            .AnyAsync(
+                order => order.AssetId == id &&
+                    (order.Status == "Solicitada" || order.Status == "Planned" || order.Status == "InProgress"),
+                cancellationToken);
         if (hasOpenOrder)
         {
             throw new BusinessConflictException("No se puede cambiar el estado: el activo tiene solicitudes de mantenimiento abiertas.");
@@ -145,7 +148,7 @@ public sealed partial class AssetManagementService
             .Include(asset => asset.Supplier)
             .Include(asset => asset.MaintenanceOrders)
                 .ThenInclude(order => order.MaintenanceType)
-            .FirstOrDefaultAsync(asset => asset.Id == id, cancellationToken)
+            .FirstOrDefaultAsync(asset => asset.Id == id && asset.IsActive, cancellationToken)
         ?? throw new EntityNotFoundException($"No existe el activo con id {id}.");
 
     private async Task ValidateAssetReferencesAsync(
