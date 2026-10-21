@@ -1,0 +1,175 @@
+@api = http://localhost:5022
+@assetId = 1
+@categoryId = 1
+@technicianId = 1
+@specialtyId = 1
+@partId = 1
+@supplierId = 3
+@maintenanceOrderId = 1
+
+### Scalar y OpenAPI
+GET {{api}}/openapi/v1.json
+Accept: application/json
+
+### Activos: filtros y detalle
+GET {{api}}/api/assets?categoryId={{categoryId}}&status=Operativo
+Accept: application/json
+
+###
+GET {{api}}/api/assets/{{assetId}}
+Accept: application/json
+
+### Registrar y actualizar activo
+POST {{api}}/api/assets
+Content-Type: application/json
+
+{
+  "assetCode": "ACT-9001",
+  "name": "Compresor de aire del taller",
+  "description": "Compresor para herramientas neumáticas",
+  "brand": "Atlas Copco",
+  "model": "GX 7",
+  "serialNumber": "SN-AC-9001",
+  "acquiredOn": "2025-02-10",
+  "purchaseCost": 1850000,
+  "usefulLifeMonths": 120,
+  "usageHours": 245,
+  "criticality": "Alta",
+  "categoryId": 3,
+  "locationId": 2,
+  "supplierId": 2
+}
+
+### Actualizar estado administrativo o imagen por URL
+PATCH {{api}}/api/assets/{{assetId}}/status
+Content-Type: application/json
+
+{
+  "status": "Fuera de Servicio"
+}
+
+###
+PUT {{api}}/api/assets/{{assetId}}/image
+Content-Type: application/json
+
+{
+  "imageUrl": "https://images.example.com/assets/compresor.jpg"
+}
+
+### Categorías
+GET {{api}}/api/asset-categories
+Accept: application/json
+
+###
+GET {{api}}/api/asset-categories/{{categoryId}}
+Accept: application/json
+
+###
+POST {{api}}/api/asset-categories
+Content-Type: application/json
+
+{
+  "name": "Sistemas de bombeo",
+  "description": "Bombas de agua y equipos de circulación",
+  "preventiveMaintenanceIntervalDays": 90
+}
+
+### Técnicos y especialidades
+GET {{api}}/api/technicians?specialtyId={{specialtyId}}&isAvailable=true
+Accept: application/json
+
+###
+GET {{api}}/api/technicians/{{technicianId}}
+Accept: application/json
+
+###
+POST {{api}}/api/technicians/{{technicianId}}/specialties/{{specialtyId}}
+Content-Type: application/json
+
+{
+  "certificationLevel": "Avanzado",
+  "certifiedSince": "2024-03-01"
+}
+
+###
+DELETE {{api}}/api/technicians/{{technicianId}}/specialties/{{specialtyId}}
+
+###
+GET {{api}}/api/specialties
+Accept: application/json
+
+###
+GET {{api}}/api/specialties/{{specialtyId}}
+Accept: application/json
+
+### Repuestos, inventario y proveedores
+GET {{api}}/api/spare-parts
+Accept: application/json
+
+###
+GET {{api}}/api/spare-parts/below-minimum
+Accept: application/json
+
+###
+GET {{api}}/api/spare-parts/{{partId}}
+Accept: application/json
+
+###
+POST {{api}}/api/spare-parts/{{partId}}/suppliers/{{supplierId}}
+Content-Type: application/json
+
+{
+  "offeredPrice": 21500,
+  "estimatedDeliveryDays": 3
+}
+
+###
+PUT {{api}}/api/spare-parts/{{partId}}/suppliers/{{supplierId}}
+Content-Type: application/json
+
+{
+  "offeredPrice": 20800,
+  "estimatedDeliveryDays": 2
+}
+
+###
+GET {{api}}/api/suppliers
+Accept: application/json
+
+###
+GET {{api}}/api/suppliers/{{supplierId}}
+Accept: application/json
+
+### Solicitudes de mantenimiento
+GET {{api}}/api/maintenance-orders?assetId={{assetId}}
+Accept: application/json
+
+###
+GET {{api}}/api/maintenance-orders/{{maintenanceOrderId}}
+Accept: application/json
+
+###
+POST {{api}}/api/maintenance-orders
+Content-Type: application/json
+
+{
+  "workOrderCode": "OT-2026-9001",
+  "assetId": 1,
+  "maintenanceTypeId": 1,
+  "title": "Limpieza preventiva",
+  "description": "Limpieza y diagnóstico general del equipo",
+  "priority": "Medium",
+  "scheduledFor": "2026-11-15"
+}
+
+### Validación 400 (código de activo inválido)
+POST {{api}}/api/assets
+Content-Type: application/json
+
+{
+  "assetCode": "INVALIDO",
+  "name": ""
+}
+
+### Conflicto 409 (categoría con activos asociados)
+DELETE {{api}}/api/asset-categories/{{categoryId}}
