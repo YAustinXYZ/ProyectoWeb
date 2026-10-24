@@ -22,7 +22,7 @@ public sealed class PruebasReglasNegocio
         await fabrica.SembrarAsync();
         using var cliente = fabrica.CreateClient();
 
-        var (estado, cuerpo) = await ObtenerAsync(cliente, "/api/Asset/9999");
+        var (estado, cuerpo) = await ObtenerAsync(cliente, "/api/assets/9999");
 
         Assert.Equal(HttpStatusCode.NotFound, estado);
         Assert.False(cuerpo.GetProperty("isSuccess").GetBoolean());
@@ -37,12 +37,12 @@ public sealed class PruebasReglasNegocio
         await fabrica.SembrarAsync();
         using var cliente = fabrica.CreateClient();
 
-        var (estado, cuerpo) = await ObtenerAsync(cliente, "/api/Asset?status=UnderMaintenance");
+        var (estado, cuerpo) = await ObtenerAsync(cliente, "/api/assets?status=UnderMaintenance");
         Assert.Equal(HttpStatusCode.OK, estado);
         Assert.All(cuerpo.GetProperty("data").EnumerateArray(),
             activo => Assert.Equal("UnderMaintenance", activo.GetProperty("status").GetString()));
 
-        var (estadoInvalido, _) = await ObtenerAsync(cliente, "/api/Asset?status=Roto");
+        var (estadoInvalido, _) = await ObtenerAsync(cliente, "/api/assets?status=Roto");
         Assert.Equal(HttpStatusCode.BadRequest, estadoInvalido);
     }
 
@@ -53,7 +53,7 @@ public sealed class PruebasReglasNegocio
         await fabrica.SembrarAsync();
         using var cliente = fabrica.CreateClient();
 
-        var (_, cuerpo) = await ObtenerAsync(cliente, "/api/Asset/1");
+        var (_, cuerpo) = await ObtenerAsync(cliente, "/api/assets/1");
         var datos = cuerpo.GetProperty("data");
 
         Assert.Equal(datos.GetProperty("maintenanceOrders").GetArrayLength(), datos.GetProperty("maintenanceOrderCount").GetInt32());
@@ -69,7 +69,7 @@ public sealed class PruebasReglasNegocio
         using var cliente = fabrica.CreateClient();
 
         // NET-0002 (id 4) tiene la orden OT-2026-0003 en Requested
-        using var respuesta = await cliente.PatchAsJsonAsync("/api/Asset/4/status", new { status = "OutOfService" });
+        using var respuesta = await cliente.PatchAsJsonAsync("/api/assets/4/status", new { status = "OutOfService" });
 
         Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
     }
@@ -82,17 +82,17 @@ public sealed class PruebasReglasNegocio
         using var cliente = fabrica.CreateClient();
 
         // PC-0001 (id 7) está sembrado como Decommissioned
-        var (_, listado) = await ObtenerAsync(cliente, "/api/Asset");
+        var (_, listado) = await ObtenerAsync(cliente, "/api/assets");
         Assert.DoesNotContain(listado.GetProperty("data").EnumerateArray(),
             activo => activo.GetProperty("status").GetString() == "Decommissioned");
 
-        var (_, bajas) = await ObtenerAsync(cliente, "/api/Asset?status=Decommissioned");
+        var (_, bajas) = await ObtenerAsync(cliente, "/api/assets?status=Decommissioned");
         Assert.Contains(bajas.GetProperty("data").EnumerateArray(), activo => activo.GetProperty("id").GetInt32() == 7);
 
-        using var baja = await cliente.DeleteAsync("/api/Asset/7");
+        using var baja = await cliente.DeleteAsync("/api/assets/7");
         Assert.Equal(HttpStatusCode.NotFound, baja.StatusCode);
 
-        using var estado = await cliente.PatchAsJsonAsync("/api/Asset/7/status", new { status = "Operational" });
+        using var estado = await cliente.PatchAsJsonAsync("/api/assets/7/status", new { status = "Operational" });
         Assert.Equal(HttpStatusCode.NotFound, estado.StatusCode);
     }
 
@@ -103,7 +103,7 @@ public sealed class PruebasReglasNegocio
         await fabrica.SembrarAsync();
         using var cliente = fabrica.CreateClient();
 
-        using var respuesta = await cliente.PostAsJsonAsync("/api/Asset", new
+        using var respuesta = await cliente.PostAsJsonAsync("/api/assets", new
         {
             name = "Activo con fecha futura",
             acquiredOn = DateTime.UtcNow.AddDays(10),
@@ -125,7 +125,7 @@ public sealed class PruebasReglasNegocio
         await fabrica.SembrarAsync();
         using var cliente = fabrica.CreateClient();
 
-        using var respuesta = await cliente.PostAsJsonAsync("/api/MaintenanceOrder", new
+        using var respuesta = await cliente.PostAsJsonAsync("/api/maintenance-orders", new
         {
             assetId = 1,
             maintenanceTypeId = 9999,
@@ -138,13 +138,29 @@ public sealed class PruebasReglasNegocio
     }
 
     [Fact]
+    public async Task ListadoOrdenes_FiltraPorActivo()
+    {
+        using var fabrica = new FabricaApi();
+        await fabrica.SembrarAsync();
+        using var cliente = fabrica.CreateClient();
+
+        var (estado, cuerpo) = await ObtenerAsync(cliente, "/api/maintenance-orders?assetId=1");
+        Assert.Equal(HttpStatusCode.OK, estado);
+        Assert.All(cuerpo.GetProperty("data").EnumerateArray(),
+            orden => Assert.Equal("SRV-0001", orden.GetProperty("assetCode").GetString()));
+
+        var (estadoInexistente, _) = await ObtenerAsync(cliente, "/api/maintenance-orders?assetId=9999");
+        Assert.Equal(HttpStatusCode.NotFound, estadoInexistente);
+    }
+
+    [Fact]
     public async Task CrearOrden_ConActivoInexistente_Responde404()
     {
         using var fabrica = new FabricaApi();
         await fabrica.SembrarAsync();
         using var cliente = fabrica.CreateClient();
 
-        using var respuesta = await cliente.PostAsJsonAsync("/api/MaintenanceOrder", new
+        using var respuesta = await cliente.PostAsJsonAsync("/api/maintenance-orders", new
         {
             assetId = 9999,
             maintenanceTypeId = 1,
@@ -163,8 +179,8 @@ public sealed class PruebasReglasNegocio
         await fabrica.SembrarAsync();
         using var cliente = fabrica.CreateClient();
 
-        var (_, todos) = await ObtenerAsync(cliente, "/api/SparePart");
-        var (_, bajoMinimo) = await ObtenerAsync(cliente, "/api/SparePart/below-minimum");
+        var (_, todos) = await ObtenerAsync(cliente, "/api/spare-parts");
+        var (_, bajoMinimo) = await ObtenerAsync(cliente, "/api/spare-parts/below-minimum");
 
         var esperados = todos.GetProperty("data").EnumerateArray().Count(r => r.GetProperty("isBelowMinimum").GetBoolean());
         Assert.True(esperados > 0);
@@ -180,13 +196,13 @@ public sealed class PruebasReglasNegocio
         await fabrica.SembrarAsync();
         using var cliente = fabrica.CreateClient();
 
-        using var negativo = await cliente.PostAsJsonAsync("/api/SparePart", new
+        using var negativo = await cliente.PostAsJsonAsync("/api/spare-parts", new
         {
             code = "REP-TEST-01", name = "Repuesto de prueba", unitOfMeasure = "Unit", currentStock = -1, minimumStock = 1
         });
         Assert.Equal(HttpStatusCode.BadRequest, negativo.StatusCode);
 
-        using var duplicado = await cliente.PostAsJsonAsync("/api/SparePart", new
+        using var duplicado = await cliente.PostAsJsonAsync("/api/spare-parts", new
         {
             code = "REP-SSD-960", name = "Repuesto duplicado", unitOfMeasure = "Unit", currentStock = 1, minimumStock = 1
         });

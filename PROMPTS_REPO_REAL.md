@@ -19,7 +19,7 @@ Cada prompt le dice a Claude Code que **lea la demo como referencia**: así copi
 | 4 | Serilog (consola + archivo diario en `Logs/`, no en el entorno Testing), `UseSerilogRequestLogging`, niveles en `appsettings.json`. | A4 |
 | 5 | Todos los controladores: `ILogger<T>` con Information al iniciar y al terminar, `/// <summary>` y `[ProducesResponseType]` con el tipo de cada respuesta. `GenerateDocumentationFile` en el csproj para que Scalar muestre los resúmenes. | A3, A4, A8 |
 | 6 | Activos: filtros `?categoryId=&status=` validados con DataAnnotations en los parámetros (400 si el estado no existe); sin `status`, el listado oculta los dados de baja, como el `Status == true` de clase; `categoryId`, `ageInMonths` y `maintenanceOrderCount` en el listado. El detalle trae además `category` (id, nombre y umbral), `hoursSinceLastMaintenance`, `preventiveMaintenanceDue` y `maintenanceOrders` (código, fecha, tipo, prioridad y estado). | C5, C8, C9, C14, C16 |
-| 7 | `PATCH /api/Asset/{id}/status` acepta también `Decommissioned` y responde 409 si el activo tiene una orden abierta. Como en el patrón de clase (`GetForUpdateAsync` excluye los eliminados), un activo dado de baja responde 404 en PUT, PATCH, DELETE e imagen; el GET por id sí lo muestra para conservar su historial. | C11, C12, C19 |
+| 7 | `PATCH /api/assets/{id}/status` acepta también `Decommissioned` y responde 409 si el activo tiene una orden abierta. Como en el patrón de clase (`GetForUpdateAsync` excluye los eliminados), un activo dado de baja responde 404 en PUT, PATCH, DELETE e imagen; el GET por id sí lo muestra para conservar su historial. | C11, C12, C19 |
 | 8 | Categorías: `assetCount` en el listado y en el detalle, y `assets` (código, nombre y estado) en el detalle. Se corrigió el nombre JSON `codePrefix`. | D6, D9 |
 | 9 | Órdenes: 404 si el activo no existe (lo pide la rúbrica); 400 si el tipo o el proveedor no existen (patrón de clase: un Id inexistente en el cuerpo es 400). El detalle trae `asset` (id, código, nombre, estado y categoría) y `daysSinceRequest` (también en el listado). | G2, G6, G7 |
 | 10 | Técnicos completos: CRUD (sin borrar), filtros `?specialtyId=&isAvailable=`, `specialtyCount`, especialidades con `seniorityInMonths`, asociar (400/404/409) y desasociar (200 con `Resultado`, como el DELETE de clase; 404). | E1–E9, E16–E20 |
@@ -126,7 +126,7 @@ C:\Users\Andrey\Downloads\ProyectoWeb-main\ProyectoWeb-main (copia la misma solu
    `throw new ExcepcionSolicitudInvalida|ExcepcionNoEncontrado|ExcepcionConflicto(mensaje);` con el mismo
    mensaje. En los controladores quita los `if (!resultado.EsExitoso)` que quedan sin sentido.
 
-Compila y prueba en Scalar: GET /api/Asset/9999 debe dar 404 con traceId y timestamp, y un POST
+Compila y prueba en Scalar: GET /api/assets/9999 debe dar 404 con traceId y timestamp, y un POST
 inválido 400 con traceId. No toques appsettings.Development.json ni hagas commits.
 ```
 
@@ -153,7 +153,7 @@ ConfiguracionMapster, ActivoListaDto, ActivoDetalleDto, CategoriaResumenActivoDt
    priority, status}].
 4. Servicio: MapearListaConConteoAsync y MapearDetalleAsync completan CantidadOrdenes con el
    diccionario. En Mapster ignora CantidadOrdenes porque lo asigna el servicio.
-5. Controlador: GET /api/Asset y la paginación reciben
+5. Controlador: GET /api/assets y la paginación reciben
    [FromQuery(Name="categoryId")] [Range(1, int.MaxValue, ErrorMessage=...)] int? y
    [FromQuery(Name="status")] [RegularExpression("^(Operational|UnderMaintenance|OutOfService|Decommissioned)$", ErrorMessage=...)] string?.
    La validación de forma es DataAnnotation (ModelState → 400), no un if en el servicio.
@@ -165,8 +165,8 @@ ConfiguracionMapster, ActivoListaDto, ActivoDetalleDto, CategoriaResumenActivoDt
 6. ActualizarEstadoActivoDto acepta Operational|OutOfService|Decommissioned. En ActualizarEstadoAsync,
    si el estado cambia y TieneOrdenesAbiertasAsync es true → ExcepcionConflicto (409).
 
-Compila y prueba: GET /api/Asset?status=OutOfService, GET /api/Asset/1 (resumen y conteo iguales) y
-PATCH /api/Asset/{id}/status sobre un activo con orden abierta (409). No hagas commits.
+Compila y prueba: GET /api/assets?status=OutOfService, GET /api/assets/1 (resumen y conteo iguales) y
+PATCH /api/assets/{id}/status sobre un activo con orden abierta (409). No hagas commits.
 ```
 
 ### Prompt 3 — Categorías y órdenes (Austin)
@@ -194,7 +194,7 @@ Categorías:
    categoryName} (ActivoResumenOrdenDto). El listado y el detalle suman daysSinceRequest
    (DiasTranscurridos en Mapster).
 
-Compila y prueba en Scalar GET /api/AssetCategory/1, GET /api/MaintenanceOrder/1 y un POST de orden
+Compila y prueba en Scalar GET /api/asset-categories/1, GET /api/maintenance-orders/1 y un POST de orden
 con assetId inexistente (404). No hagas commits.
 ```
 
@@ -253,9 +253,9 @@ RepuestoProveedorDto, ProveedorRepuestoDto y CondicionesProveedorRepuestoDto).
    OfferedPrice decimal(18,2), EstimatedLeadTimeDays), índice único en Code, FKs Restrict y los CHECKs
    CK_SpareParts_Stock, CK_SpareParts_UnitOfMeasure (Unit, Box, Pack, Meter, Roll, Kit),
    CK_SparePartSuppliers_OfferedPrice y CK_SparePartSuppliers_LeadTimeDays.
-3. Endpoints: GET/POST /api/SparePart, GET /api/SparePart/below-minimum, paginación,
-   GET/PUT /api/SparePart/{id} (código único → 409; stock negativo → 400),
-   POST /api/SparePart/{id}/suppliers/{supplierId} (201; 404 si falta el repuesto o el proveedor;
+3. Endpoints: GET/POST /api/spare-parts, GET /api/spare-parts/below-minimum, paginación,
+   GET/PUT /api/spare-parts/{id} (código único → 409; stock negativo → 400),
+   POST /api/spare-parts/{id}/suppliers/{supplierId} (201; 404 si falta el repuesto o el proveedor;
    409 si ya está asociado o el proveedor está inactivo) y PUT de la misma ruta (200 o 404).
 4. Calculados: isBelowMinimum (StockActual < StockMinimo, la misma condición que below-minimum),
    shortage = Math.Max(StockMinimo - StockActual, 0) y supplierCount con GroupBy en SQL. El detalle
@@ -293,6 +293,11 @@ dotnet ef migrations add SeedItCatalog --project Proyecto.Infraestructure --star
 dotnet ef database drop -f --project Proyecto.Infraestructure --startup-project Proyecto.WebAPI -- --environment Development
 dotnet ef database update --project Proyecto.Infraestructure --startup-project Proyecto.WebAPI -- --environment Development
 Si el update falla por una restricción, corrige el dato semilla, borra la migración y genérala de nuevo.
+Si falla por una FK (por ejemplo FK_MaintenanceOrders_MaintenanceTypes): EF agrupa los UpdateData/InsertData
+por tabla sin respetar las dependencias. Reordena el Up() de la migración para que vaya CreateTable, luego los
+datos en este orden de tablas: Specialties, AssetCategories, Locations, Suppliers, MaintenanceTypes,
+Technicians, Assets, MaintenanceOrders, TechnicianSpecialties, SpareParts, SparePartSuppliers, y al final
+CreateIndex, sin cambiar el contenido de cada operación.
 No hagas commits.
 ```
 
@@ -336,6 +341,28 @@ C:\Users\Andrey\Downloads\ProyectoWeb-main\ProyectoWeb-main.
 4. Ejecuta dotnet test Proyecto.slnx y corrige lo que falle en el código, no en las pruebas (salvo
    que la prueba esté mal; en ese caso explícame por qué).
 No hagas commits.
+```
+
+### Prompt 8b — Ajustes del enunciado del Avance 1 (Austin)
+
+Commit: `refactor: use plural rest routes and log trace ids`
+
+```text
+Trabaja en C:\Users\Andrey\source\repos\Proyecto. Referencia: la demo en
+C:\Users\Andrey\Downloads\ProyectoWeb-main\ProyectoWeb-main. El enunciado del Avance 1 (3.2) pide rutas
+/api/{recurso} en plural y consistentes, y la parte 9 del video pide cruzar el traceId con el log.
+1. Rutas: api/assets, api/asset-categories, api/suppliers, api/spare-parts, api/maintenance-orders
+   (técnicos, especialidades y catálogos ya están en plural). Sub-recursos: /api/assets/{id}/status,
+   /api/assets/{id}/image, /api/technicians/{id}/specialties/{specialtyId},
+   /api/spare-parts/{id}/suppliers/{supplierId}, /api/spare-parts/below-minimum. Actualiza pruebas y README.
+2. Órdenes: quita la ruta by-asset; el filtro va en el listado: GET /api/maintenance-orders?assetId=
+   con [Range(1, int.MaxValue)] (404 si el activo no existe, usando ObtenerPorActivoAsync).
+3. traceId: en ManejadorGlobalExcepciones y en InvalidModelStateResponseFactory usa
+   Activity.Current?.TraceId.ToString() ?? TraceIdentifier. En Serilog agrega outputTemplate con
+   [{TraceId}] a la consola y al archivo, para que el valor de la respuesta aparezca igual en el log.
+4. En AddControllers agrega el filtro global
+   ProducesResponseTypeAttribute(typeof(Resultado<object>), 500) para que Scalar documente el 500.
+Compila, corre dotnet test y prueba en Scalar un 409 comparando su traceId con la consola. No hagas commits.
 ```
 
 ### Prompt 9 — Verificación final contra la rúbrica (cualquiera de los dos, sin commit)

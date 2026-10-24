@@ -21,7 +21,8 @@ public sealed class ManejadorGlobalExcepciones : IExceptionHandler
 
     public async ValueTask<bool> TryHandleAsync(HttpContext contexto, Exception excepcion, CancellationToken cancelacion)
     {
-        var identificadorTraza = Activity.Current?.Id ?? contexto.TraceIdentifier;
+        // Mismo TraceId que Serilog escribe en cada línea del log: así se cruza la respuesta con el log
+        var identificadorTraza = Activity.Current?.TraceId.ToString() ?? contexto.TraceIdentifier;
         var ruta = $"{contexto.Request.Method} {contexto.Request.Path}";
 
         Resultado<object> respuesta;

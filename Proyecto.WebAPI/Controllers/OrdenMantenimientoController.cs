@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Proyecto.Application.Interfaces;
 using Proyecto.Domain.DTO;
@@ -5,8 +6,8 @@ using Proyecto.Domain.DTO.ResultadoPatron;
 
 namespace Proyecto.WebAPI.Controllers;
 
-/// <summary>Órdenes de mantenimiento (alcance del Avance 1: solicitud y consulta).</summary>
-[Route("api/MaintenanceOrder")]
+/// <summary>Solicitudes de mantenimiento: registro y consulta.</summary>
+[Route("api/maintenance-orders")]
 [ApiController]
 [Produces("application/json")]
 public class OrdenMantenimientoController : ControllerBase
@@ -20,21 +21,37 @@ public class OrdenMantenimientoController : ControllerBase
         _registro = registro;
     }
 
-    /// <summary>Lista las órdenes con los días transcurridos desde la solicitud.</summary>
+    /// <summary>Obtiene la lista de órdenes de mantenimiento.</summary>
+    /// <remarks>Se puede filtrar por activo. Cada orden incluye el código y el nombre del activo y los días transcurridos desde la solicitud.</remarks>
+    /// <param name="activoId">Id del activo (opcional).</param>
+    /// <response code="200">Lista de órdenes.</response>
+    /// <response code="400">El filtro no es válido.</response>
+    /// <response code="404">No existe el activo indicado en el filtro.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet]
     [ProducesResponseType(typeof(Resultado<IEnumerable<OrdenMantenimientoListaDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ObtenerTodosAsync()
+    [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ObtenerTodosAsync(
+        [FromQuery(Name = "assetId")] [Range(1, int.MaxValue, ErrorMessage = "El filtro assetId debe ser 1 o mayor.")] int? activoId)
     {
-        _registro.LogInformation("Listando órdenes de mantenimiento");
+        _registro.LogInformation("Listando órdenes de mantenimiento (assetId={ActivoId})", activoId);
 
-        var resultado = await _servicio.ObtenerTodosAsync();
+        var resultado = activoId is null
+            ? await _servicio.ObtenerTodosAsync()
+            : await _servicio.ObtenerPorActivoAsync(activoId.Value);
 
         _registro.LogInformation("Listado de órdenes completado: {Cantidad} registros", resultado.Datos?.Count() ?? 0);
 
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Lista las órdenes por páginas.</summary>
+    /// <summary>Obtiene la lista de órdenes por páginas.</summary>
+    /// <param name="paginaNumero">Número de página, empezando en 1.</param>
+    /// <param name="tamanoPagina">Cantidad de registros por página (entre 1 y 50).</param>
+    /// <response code="200">Página de órdenes.</response>
+    /// <response code="400">La página o el tamaño no son válidos.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("{pageNumber:int}/{pageSize:int}")]
     [ProducesResponseType(typeof(Resultado<IEnumerable<OrdenMantenimientoListaDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -49,7 +66,12 @@ public class OrdenMantenimientoController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Detalle de una orden con el activo relacionado (código, nombre, estado y categoría).</summary>
+    /// <summary>Obtiene el detalle de una orden.</summary>
+    /// <remarks>Incluye el activo relacionado (código, nombre, estado y categoría) y los días transcurridos desde la solicitud.</remarks>
+    /// <param name="id">Id de la orden.</param>
+    /// <response code="200">Detalle de la orden.</response>
+    /// <response code="404">No existe una orden con el id indicado.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("{id:int}", Name = "GetMaintenanceOrderById")]
     [ProducesResponseType(typeof(Resultado<OrdenMantenimientoDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status404NotFound)]
@@ -64,23 +86,13 @@ public class OrdenMantenimientoController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Lista las órdenes de un activo (filtro por activo).</summary>
-    [HttpGet("by-asset/{assetId:int}")]
-    [ProducesResponseType(typeof(Resultado<IEnumerable<OrdenMantenimientoListaDto>>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ObtenerPorActivoAsync(int assetId)
-    {
-        _registro.LogInformation("Listando las órdenes del activo {ActivoId}", assetId);
-
-        var resultado = await _servicio.ObtenerPorActivoAsync(assetId);
-
-        _registro.LogInformation("Órdenes del activo {ActivoId} listadas: {Cantidad}", assetId, resultado.Datos?.Count() ?? 0);
-
-        return StatusCode(resultado.Estado, resultado);
-    }
-
-    /// <summary>Crea una solicitud de orden; el estado siempre inicia en Requested.</summary>
-    /// <remarks>404 si el activo no existe; 400 si el tipo o el proveedor no existen; 409 si el activo está dado de baja.</remarks>
+    /// <summary>Registra una solicitud de mantenimiento.</summary>
+    /// <remarks>La orden siempre se crea en estado Requested y el sistema asigna su código (por ejemplo, OT-2026-0011). No se permite para un activo dado de baja.</remarks>
+    /// <response code="201">Solicitud registrada.</response>
+    /// <response code="400">Los datos no son válidos, o el tipo de mantenimiento o el proveedor no existen.</response>
+    /// <response code="404">No existe el activo indicado.</response>
+    /// <response code="409">El activo está dado de baja, el proveedor está inactivo o el activo ya tiene una orden abierta.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPost]
     [ProducesResponseType(typeof(Resultado<OrdenMantenimientoDetalleDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]

@@ -5,8 +5,8 @@ using Proyecto.Domain.DTO.ResultadoPatron;
 
 namespace Proyecto.WebAPI.Controllers;
 
-/// <summary>Repuestos, su stock y los proveedores que los ofrecen (relación N:N con precio y tiempo de entrega).</summary>
-[Route("api/SparePart")]
+/// <summary>Administración de los repuestos, su stock y los proveedores que los ofrecen.</summary>
+[Route("api/spare-parts")]
 [ApiController]
 [Produces("application/json")]
 public class RepuestoController : ControllerBase
@@ -20,7 +20,10 @@ public class RepuestoController : ControllerBase
         _registro = registro;
     }
 
-    /// <summary>Lista los repuestos con el indicador de stock bajo, el faltante y la cantidad de proveedores.</summary>
+    /// <summary>Obtiene la lista de repuestos.</summary>
+    /// <remarks>Cada repuesto indica si está por debajo del stock mínimo, cuántas unidades faltan para llegar al mínimo y cuántos proveedores lo ofrecen.</remarks>
+    /// <response code="200">Lista de repuestos.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet]
     [ProducesResponseType(typeof(Resultado<IEnumerable<RepuestoListaDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ObtenerTodosAsync()
@@ -34,7 +37,9 @@ public class RepuestoController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Lista solo los repuestos con stock actual por debajo del mínimo.</summary>
+    /// <summary>Obtiene los repuestos con stock por debajo del mínimo.</summary>
+    /// <response code="200">Lista de repuestos con stock bajo.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("below-minimum")]
     [ProducesResponseType(typeof(Resultado<IEnumerable<RepuestoListaDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ObtenerBajoMinimoAsync()
@@ -48,7 +53,12 @@ public class RepuestoController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Lista los repuestos por páginas.</summary>
+    /// <summary>Obtiene la lista de repuestos por páginas.</summary>
+    /// <param name="paginaNumero">Número de página, empezando en 1.</param>
+    /// <param name="tamanoPagina">Cantidad de registros por página (entre 1 y 50).</param>
+    /// <response code="200">Página de repuestos.</response>
+    /// <response code="400">La página o el tamaño no son válidos.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("{pageNumber:int}/{pageSize:int}")]
     [ProducesResponseType(typeof(Resultado<IEnumerable<RepuestoListaDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -63,7 +73,12 @@ public class RepuestoController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Detalle de un repuesto con sus proveedores, precio ofrecido y tiempo de entrega.</summary>
+    /// <summary>Obtiene el detalle de un repuesto.</summary>
+    /// <remarks>Incluye los proveedores que lo ofrecen, con su precio y tiempo de entrega.</remarks>
+    /// <param name="id">Id del repuesto.</param>
+    /// <response code="200">Detalle del repuesto.</response>
+    /// <response code="404">No existe un repuesto con el id indicado.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("{id:int}", Name = "GetSparePartById")]
     [ProducesResponseType(typeof(Resultado<RepuestoDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status404NotFound)]
@@ -78,7 +93,12 @@ public class RepuestoController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Registra un repuesto; el código debe ser único y el stock no puede ser negativo.</summary>
+    /// <summary>Registra un repuesto nuevo.</summary>
+    /// <remarks>El código no se puede repetir y el stock no puede ser negativo.</remarks>
+    /// <response code="201">Repuesto registrado.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="409">Ya existe un repuesto con ese código.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPost]
     [ProducesResponseType(typeof(Resultado<RepuestoDetalleDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -95,6 +115,12 @@ public class RepuestoController : ControllerBase
     }
 
     /// <summary>Actualiza un repuesto.</summary>
+    /// <param name="id">Id del repuesto.</param>
+    /// <response code="200">Repuesto actualizado.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="404">No existe un repuesto con el id indicado.</response>
+    /// <response code="409">Ya existe otro repuesto con ese código.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(Resultado<RepuestoDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -111,8 +137,15 @@ public class RepuestoController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Asocia un proveedor al repuesto con su precio y tiempo de entrega.</summary>
-    /// <remarks>404 si no existe el repuesto o el proveedor; 409 si ya está asociado o el proveedor está inactivo.</remarks>
+    /// <summary>Asocia un proveedor a un repuesto.</summary>
+    /// <remarks>Se indica el precio ofrecido y el tiempo de entrega estimado en días. El proveedor debe estar activo.</remarks>
+    /// <param name="id">Id del repuesto.</param>
+    /// <param name="proveedorId">Id del proveedor.</param>
+    /// <response code="201">Proveedor asociado.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="404">No existe el repuesto o el proveedor.</response>
+    /// <response code="409">El proveedor ya está asociado o está inactivo.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPost("{id:int}/suppliers/{supplierId:int}")]
     [ProducesResponseType(typeof(Resultado<RepuestoDetalleDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -130,7 +163,13 @@ public class RepuestoController : ControllerBase
         return CreatedAtRoute("GetSparePartById", new { id }, resultado);
     }
 
-    /// <summary>Actualiza el precio y el tiempo de entrega de un proveedor para el repuesto.</summary>
+    /// <summary>Actualiza el precio y el tiempo de entrega de un proveedor para un repuesto.</summary>
+    /// <param name="id">Id del repuesto.</param>
+    /// <param name="proveedorId">Id del proveedor.</param>
+    /// <response code="200">Condiciones actualizadas.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="404">El proveedor no está asociado a ese repuesto.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPut("{id:int}/suppliers/{supplierId:int}")]
     [ProducesResponseType(typeof(Resultado<RepuestoDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]

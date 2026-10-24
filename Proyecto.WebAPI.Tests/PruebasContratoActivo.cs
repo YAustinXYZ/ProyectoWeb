@@ -48,7 +48,7 @@ public sealed class PruebasContratoActivo
             locationId = 1
         };
 
-        using var respuesta = await cliente.PostAsJsonAsync("/api/Asset", solicitud);
+        using var respuesta = await cliente.PostAsJsonAsync("/api/assets", solicitud);
 
         Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
         using var cuerpo = await JsonDocument.ParseAsync(await respuesta.Content.ReadAsStreamAsync());

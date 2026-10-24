@@ -37,13 +37,13 @@ Todas las respuestas usan `Resultado<T>` (`isSuccess`, `statusCode`, `title`, `d
 
 | Recurso | Rutas |
 | --- | --- |
-| Activos | `GET/POST /api/Asset` (filtros `categoryId` y `status`), `GET/PUT/DELETE /api/Asset/{id}`, `PATCH /api/Asset/{id}/status`, `POST/DELETE /api/Asset/{id}/image` |
-| Categorías | `GET/POST /api/AssetCategory`, `GET/PUT/DELETE /api/AssetCategory/{id}` |
-| Proveedores | `GET/POST /api/Supplier`, `GET/PUT/DELETE /api/Supplier/{id}` |
-| Repuestos | `GET/POST /api/SparePart`, `GET /api/SparePart/below-minimum`, `GET/PUT /api/SparePart/{id}`, `POST/PUT /api/SparePart/{id}/suppliers/{supplierId}` |
+| Activos | `GET/POST /api/assets` (filtros `categoryId` y `status`), `GET/PUT/DELETE /api/assets/{id}`, `PATCH /api/assets/{id}/status`, `POST/DELETE /api/assets/{id}/image` |
+| Categorías | `GET/POST /api/asset-categories`, `GET/PUT/DELETE /api/asset-categories/{id}` |
+| Proveedores | `GET/POST /api/suppliers`, `GET/PUT/DELETE /api/suppliers/{id}` |
+| Repuestos | `GET/POST /api/spare-parts`, `GET /api/spare-parts/below-minimum`, `GET/PUT /api/spare-parts/{id}`, `POST/PUT /api/spare-parts/{id}/suppliers/{supplierId}` |
 | Técnicos | `GET/POST /api/technicians` (filtros `specialtyId` e `isAvailable`), `GET/PUT /api/technicians/{id}`, `POST/DELETE /api/technicians/{id}/specialties/{specialtyId}` |
 | Especialidades | `GET/POST /api/specialties`, `GET/PUT /api/specialties/{id}` |
-| Órdenes | `GET/POST /api/MaintenanceOrder`, `GET /api/MaintenanceOrder/{id}`, `GET /api/MaintenanceOrder/by-asset/{assetId}` |
+| Órdenes | `GET/POST /api/maintenance-orders`, `GET /api/maintenance-orders/{id}`, filtro `?assetId=` en el listado |
 | Catálogos | `GET /api/locations`, `GET /api/maintenance-types` |
 
 Las listas principales también tienen paginación: `GET /api/{recurso}/{pageNumber}/{pageSize}`.

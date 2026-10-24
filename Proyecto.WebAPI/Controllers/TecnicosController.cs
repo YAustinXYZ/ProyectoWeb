@@ -6,7 +6,7 @@ using Proyecto.Domain.DTO.ResultadoPatron;
 
 namespace Proyecto.WebAPI.Controllers;
 
-/// <summary>Técnicos y sus especialidades (relación N:N con nivel y fecha de certificación).</summary>
+/// <summary>Administración de los técnicos y de sus especialidades.</summary>
 [Route("api/technicians")]
 [ApiController]
 [Produces("application/json")]
@@ -21,7 +21,13 @@ public class TecnicosController : ControllerBase
         _registro = registro;
     }
 
-    /// <summary>Lista los técnicos, con filtro opcional por especialidad y por disponibilidad.</summary>
+    /// <summary>Obtiene la lista de técnicos.</summary>
+    /// <remarks>Se puede filtrar por especialidad y por disponibilidad. Cada técnico incluye la cantidad de especialidades que tiene.</remarks>
+    /// <param name="especialidadId">Id de la especialidad (opcional).</param>
+    /// <param name="estaDisponible">true para disponibles, false para no disponibles (opcional).</param>
+    /// <response code="200">Lista de técnicos.</response>
+    /// <response code="400">Alguno de los filtros no es válido.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet]
     [ProducesResponseType(typeof(Resultado<IEnumerable<TecnicoListaDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -38,7 +44,12 @@ public class TecnicosController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Detalle de un técnico con cada especialidad, su nivel, fecha y antigüedad en meses.</summary>
+    /// <summary>Obtiene el detalle de un técnico.</summary>
+    /// <remarks>Incluye cada especialidad con su nivel de certificación, la fecha desde la que la tiene y la antigüedad en meses.</remarks>
+    /// <param name="id">Id del técnico.</param>
+    /// <response code="200">Detalle del técnico.</response>
+    /// <response code="404">No existe un técnico con el id indicado.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("{id:int}", Name = "GetTechnicianById")]
     [ProducesResponseType(typeof(Resultado<TecnicoDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status404NotFound)]
@@ -53,7 +64,12 @@ public class TecnicosController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Registra un técnico; la identificación debe ser única.</summary>
+    /// <summary>Registra un técnico nuevo.</summary>
+    /// <remarks>La identificación no se puede repetir.</remarks>
+    /// <response code="201">Técnico registrado.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="409">Ya existe un técnico con esa identificación.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPost]
     [ProducesResponseType(typeof(Resultado<TecnicoDetalleDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -70,6 +86,12 @@ public class TecnicosController : ControllerBase
     }
 
     /// <summary>Actualiza un técnico.</summary>
+    /// <param name="id">Id del técnico.</param>
+    /// <response code="200">Técnico actualizado.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="404">No existe un técnico con el id indicado.</response>
+    /// <response code="409">Ya existe otro técnico con esa identificación.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(Resultado<TecnicoDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -86,8 +108,15 @@ public class TecnicosController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Asocia una especialidad al técnico con su nivel y fecha de certificación.</summary>
-    /// <remarks>400 si el nivel es inválido o la fecha es futura; 404 si no existe el técnico o la especialidad; 409 si ya la tiene.</remarks>
+    /// <summary>Asocia una especialidad a un técnico.</summary>
+    /// <remarks>Se indica el nivel de certificación (Basic, Intermediate o Advanced) y la fecha desde la que la tiene, que no puede ser futura.</remarks>
+    /// <param name="id">Id del técnico.</param>
+    /// <param name="especialidadId">Id de la especialidad.</param>
+    /// <response code="201">Especialidad asociada; devuelve el técnico actualizado.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="404">No existe el técnico o la especialidad.</response>
+    /// <response code="409">El técnico ya tiene esa especialidad.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPost("{id:int}/specialties/{specialtyId:int}")]
     [ProducesResponseType(typeof(Resultado<TecnicoDetalleDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -105,7 +134,12 @@ public class TecnicosController : ControllerBase
         return CreatedAtRoute("GetTechnicianById", new { id }, resultado);
     }
 
-    /// <summary>Quita una especialidad del técnico y devuelve el técnico actualizado.</summary>
+    /// <summary>Quita una especialidad de un técnico.</summary>
+    /// <param name="id">Id del técnico.</param>
+    /// <param name="especialidadId">Id de la especialidad.</param>
+    /// <response code="200">Especialidad quitada; devuelve el técnico actualizado.</response>
+    /// <response code="404">No existe el técnico o no tiene esa especialidad.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpDelete("{id:int}/specialties/{specialtyId:int}")]
     [ProducesResponseType(typeof(Resultado<TecnicoDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status404NotFound)]

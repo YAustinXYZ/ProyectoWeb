@@ -5,7 +5,7 @@ using Proyecto.Domain.DTO.ResultadoPatron;
 
 namespace Proyecto.WebAPI.Controllers;
 
-/// <summary>Especialidades técnicas.</summary>
+/// <summary>Administración de las especialidades técnicas.</summary>
 [Route("api/specialties")]
 [ApiController]
 [Produces("application/json")]
@@ -20,7 +20,10 @@ public class EspecialidadesController : ControllerBase
         _registro = registro;
     }
 
-    /// <summary>Lista las especialidades con la cantidad de técnicos que las poseen.</summary>
+    /// <summary>Obtiene la lista de especialidades.</summary>
+    /// <remarks>Cada especialidad incluye la cantidad de técnicos que la tienen.</remarks>
+    /// <response code="200">Lista de especialidades.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet]
     [ProducesResponseType(typeof(Resultado<IEnumerable<EspecialidadListaDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ObtenerTodosAsync()
@@ -34,7 +37,12 @@ public class EspecialidadesController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Detalle de una especialidad con los técnicos que la poseen, su nivel y disponibilidad.</summary>
+    /// <summary>Obtiene el detalle de una especialidad.</summary>
+    /// <remarks>Incluye los técnicos que la tienen, con su nivel de certificación y disponibilidad.</remarks>
+    /// <param name="id">Id de la especialidad.</param>
+    /// <response code="200">Detalle de la especialidad.</response>
+    /// <response code="404">No existe una especialidad con el id indicado.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("{id:int}", Name = "GetSpecialtyById")]
     [ProducesResponseType(typeof(Resultado<EspecialidadDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status404NotFound)]
@@ -49,7 +57,12 @@ public class EspecialidadesController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Registra una especialidad; el nombre debe ser único.</summary>
+    /// <summary>Registra una especialidad nueva.</summary>
+    /// <remarks>El nombre no se puede repetir.</remarks>
+    /// <response code="201">Especialidad registrada.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="409">Ya existe una especialidad con ese nombre.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPost]
     [ProducesResponseType(typeof(Resultado<EspecialidadDetalleDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -66,6 +79,12 @@ public class EspecialidadesController : ControllerBase
     }
 
     /// <summary>Actualiza una especialidad.</summary>
+    /// <param name="id">Id de la especialidad.</param>
+    /// <response code="200">Especialidad actualizada.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="404">No existe una especialidad con el id indicado.</response>
+    /// <response code="409">Ya existe otra especialidad con ese nombre.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(Resultado<EspecialidadDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]

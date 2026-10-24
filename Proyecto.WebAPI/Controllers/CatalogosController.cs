@@ -5,7 +5,7 @@ using Proyecto.Domain.DTO.ResultadoPatron;
 
 namespace Proyecto.WebAPI.Controllers;
 
-/// <summary>Catálogos de solo lectura para los formularios: ubicaciones y tipos de mantenimiento.</summary>
+/// <summary>Catálogos de consulta: ubicaciones y tipos de mantenimiento.</summary>
 [Route("api")]
 [ApiController]
 [Produces("application/json")]
@@ -20,7 +20,9 @@ public class CatalogosController : ControllerBase
         _registro = registro;
     }
 
-    /// <summary>Lista las ubicaciones activas.</summary>
+    /// <summary>Obtiene las ubicaciones activas.</summary>
+    /// <response code="200">Lista de ubicaciones.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("locations")]
     [ProducesResponseType(typeof(Resultado<IEnumerable<UbicacionListaDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ObtenerUbicacionesAsync()
@@ -34,7 +36,10 @@ public class CatalogosController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Lista los tipos de mantenimiento con la especialidad que requiere cada uno.</summary>
+    /// <summary>Obtiene los tipos de mantenimiento.</summary>
+    /// <remarks>Cada tipo indica si es de emergencia y la especialidad que requiere.</remarks>
+    /// <response code="200">Lista de tipos de mantenimiento.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("maintenance-types")]
     [ProducesResponseType(typeof(Resultado<IEnumerable<TipoMantenimientoListaDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ObtenerTiposMantenimientoAsync()

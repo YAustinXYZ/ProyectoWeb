@@ -22,16 +22,22 @@ constructor.Host.UseSerilog((contexto, configuracionLog) =>
     configuracionLog
         .ReadFrom.Configuration(contexto.Configuration)
         .Enrich.FromLogContext()
-        .WriteTo.Console();
+        // El TraceId en cada línea permite seguir una solicitud y compararlo con el traceId de la respuesta
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{TraceId}] {SourceContext}: {Message:lj}{NewLine}{Exception}");
 
     // Las pruebas automatizadas (entorno Testing) no escriben archivos de log
     if (!contexto.HostingEnvironment.IsEnvironment("Testing"))
-        configuracionLog.WriteTo.File(Path.Combine("Logs", "log-.txt"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14);
+        configuracionLog.WriteTo.File(Path.Combine("Logs", "log-.txt"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14,
+            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] [{TraceId}] {SourceContext}: {Message:lj}{NewLine}{Exception}");
 });
 
 // Agrega los servicios al contenedor.
 
-constructor.Services.AddControllers()
+constructor.Services.AddControllers(opciones =>
+    {
+        // Todo endpoint puede responder 500 (lo arma el manejador global): se documenta una sola vez para Scalar
+        opciones.Filters.Add(new ProducesResponseTypeAttribute(typeof(Resultado<object>), StatusCodes.Status500InternalServerError));
+    })
     .ConfigureApiBehaviorOptions(opciones =>
     {
         // Sin esto, un DTO inválido responde con el ValidationProblemDetails de ASP.NET y no con Resultado<T>
@@ -46,7 +52,7 @@ constructor.Services.AddControllers()
             var resultado = Resultado<Dictionary<string, string[]>>.Fallo(400, "Solicitud incorrecta",
                 "Uno o más datos no son válidos.");
             resultado.Datos = errores;
-            resultado.IdentificadorTraza = System.Diagnostics.Activity.Current?.Id ?? contexto.HttpContext.TraceIdentifier;
+            resultado.IdentificadorTraza = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? contexto.HttpContext.TraceIdentifier;
 
             return new BadRequestObjectResult(resultado);
         };

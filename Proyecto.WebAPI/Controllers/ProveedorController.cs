@@ -5,8 +5,8 @@ using Proyecto.Domain.DTO.ResultadoPatron;
 
 namespace Proyecto.WebAPI.Controllers;
 
-/// <summary>Proveedores de servicios y de repuestos.</summary>
-[Route("api/Supplier")]
+/// <summary>Administración de los proveedores de servicios y de repuestos.</summary>
+[Route("api/suppliers")]
 [ApiController]
 [Produces("application/json")]
 public class ProveedorController : ControllerBase
@@ -20,7 +20,9 @@ public class ProveedorController : ControllerBase
         _registro = registro;
     }
 
-    /// <summary>Lista los proveedores.</summary>
+    /// <summary>Obtiene la lista de proveedores.</summary>
+    /// <response code="200">Lista de proveedores.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet]
     [ProducesResponseType(typeof(Resultado<IEnumerable<ProveedorListaDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ObtenerTodosAsync()
@@ -34,7 +36,12 @@ public class ProveedorController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Lista los proveedores por páginas.</summary>
+    /// <summary>Obtiene la lista de proveedores por páginas.</summary>
+    /// <param name="paginaNumero">Número de página, empezando en 1.</param>
+    /// <param name="tamanoPagina">Cantidad de registros por página (entre 1 y 50).</param>
+    /// <response code="200">Página de proveedores.</response>
+    /// <response code="400">La página o el tamaño no son válidos.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("{pageNumber:int}/{pageSize:int}")]
     [ProducesResponseType(typeof(Resultado<IEnumerable<ProveedorListaDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -49,7 +56,12 @@ public class ProveedorController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Detalle de un proveedor con los repuestos que suministra, su precio y tiempo de entrega.</summary>
+    /// <summary>Obtiene el detalle de un proveedor.</summary>
+    /// <remarks>Incluye los repuestos que suministra, con su precio ofrecido y tiempo de entrega.</remarks>
+    /// <param name="id">Id del proveedor.</param>
+    /// <response code="200">Detalle del proveedor.</response>
+    /// <response code="404">No existe un proveedor con el id indicado.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpGet("{id:int}", Name = "GetSupplierById")]
     [ProducesResponseType(typeof(Resultado<ProveedorDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status404NotFound)]
@@ -64,7 +76,12 @@ public class ProveedorController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Registra un proveedor; la cédula jurídica debe ser única.</summary>
+    /// <summary>Registra un proveedor nuevo.</summary>
+    /// <remarks>La cédula jurídica no se puede repetir.</remarks>
+    /// <response code="201">Proveedor registrado.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="409">Ya existe un proveedor con esa cédula jurídica.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPost]
     [ProducesResponseType(typeof(Resultado<ProveedorDetalleDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -81,6 +98,12 @@ public class ProveedorController : ControllerBase
     }
 
     /// <summary>Actualiza un proveedor.</summary>
+    /// <param name="id">Id del proveedor.</param>
+    /// <response code="200">Proveedor actualizado.</response>
+    /// <response code="400">Los datos enviados no son válidos. La respuesta indica qué campo falló y por qué.</response>
+    /// <response code="404">No existe un proveedor con el id indicado.</response>
+    /// <response code="409">Ya existe otro proveedor con esa cédula jurídica.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(Resultado<ProveedorDetalleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status400BadRequest)]
@@ -97,7 +120,13 @@ public class ProveedorController : ControllerBase
         return StatusCode(resultado.Estado, resultado);
     }
 
-    /// <summary>Elimina un proveedor sin activos, órdenes ni repuestos asociados (409 si los tiene).</summary>
+    /// <summary>Elimina un proveedor.</summary>
+    /// <remarks>Solo se puede eliminar si no tiene activos, órdenes ni repuestos asociados.</remarks>
+    /// <param name="id">Id del proveedor.</param>
+    /// <response code="200">Proveedor eliminado.</response>
+    /// <response code="404">No existe un proveedor con el id indicado.</response>
+    /// <response code="409">El proveedor tiene registros asociados.</response>
+    /// <response code="500">Error inesperado del servidor. La respuesta incluye el traceId para buscarlo en el log.</response>
     [HttpDelete("{id:int}")]
     [ProducesResponseType(typeof(Resultado<int>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Resultado<object>), StatusCodes.Status404NotFound)]
