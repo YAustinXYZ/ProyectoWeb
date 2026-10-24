@@ -5,8 +5,8 @@ namespace Proyecto.Application.Interfaces;
 
 public interface IActivoService
 {
-    Task<Resultado<IEnumerable<ActivoListaDto>>> ObtenerTodosAsync();
-    Task<Resultado<IEnumerable<ActivoListaDto>>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina);
+    Task<Resultado<IEnumerable<ActivoListaDto>>> ObtenerTodosAsync(int? categoriaId = null, string? estado = null);
+    Task<Resultado<IEnumerable<ActivoListaDto>>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina, int? categoriaId = null, string? estado = null);
     Task<Resultado<ActivoDetalleDto>> ObtenerPorIdentificadorAsync(int id);
     Task<Resultado<ActivoDetalleDto>> AgregarAsync(ActivoCrearDto activo);
     Task<Resultado<ActivoDetalleDto>> ActualizarAsync(int id, ActivoActualizarDto activo);

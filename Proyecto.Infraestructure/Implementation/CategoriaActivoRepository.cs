@@ -50,7 +50,22 @@ public class CategoriaActivoRepository : ICategoriaActivoRepository
     {
         var resultado = await _contexto.CategoriasActivos
             .AsNoTracking()
+            .Include(c => c.Activos.OrderBy(a => a.CodigoActivo))   // Listado resumido del detalle
             .FirstOrDefaultAsync(c => c.Identificador == id);
+
+        return resultado;
+    }
+
+    // Un solo SELECT ... GROUP BY CategoryId; las categorías sin activos no aparecen y valen 0
+    public async Task<Dictionary<int, int>> ContarActivosPorCategoriaAsync(IEnumerable<int> idsCategorias)
+    {
+        var ids = idsCategorias.ToList();
+
+        var resultado = await _contexto.Activos
+            .Where(a => ids.Contains(a.CategoriaActivoId))
+            .GroupBy(a => a.CategoriaActivoId)
+            .Select(grupo => new { CategoriaId = grupo.Key, Cantidad = grupo.Count() })
+            .ToDictionaryAsync(x => x.CategoriaId, x => x.Cantidad);
 
         return resultado;
     }

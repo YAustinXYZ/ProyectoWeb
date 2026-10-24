@@ -9,9 +9,25 @@ using Proyecto.Domain.DTO.ResultadoPatron;
 using Proyecto.Infraestructure.Data;
 using Proyecto.Infraestructure.Implementation;
 using Proyecto.Infraestructure.Interfaces;
+using Proyecto.WebAPI.Middleware;
 using Scalar.AspNetCore;
+using Serilog;
 
 var constructor = WebApplication.CreateBuilder(args);
+
+// Serilog: consola para desarrollo y un archivo diario en Logs/ para revisar errores después.
+// Los niveles se leen de la sección "Serilog" de appsettings.json.
+constructor.Host.UseSerilog((contexto, configuracionLog) =>
+{
+    configuracionLog
+        .ReadFrom.Configuration(contexto.Configuration)
+        .Enrich.FromLogContext()
+        .WriteTo.Console();
+
+    // Las pruebas automatizadas (entorno Testing) no escriben archivos de log
+    if (!contexto.HostingEnvironment.IsEnvironment("Testing"))
+        configuracionLog.WriteTo.File(Path.Combine("Logs", "log-.txt"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14);
+});
 
 // Agrega los servicios al contenedor.
 
@@ -30,15 +46,22 @@ constructor.Services.AddControllers()
             var resultado = Resultado<Dictionary<string, string[]>>.Fallo(400, "Solicitud incorrecta",
                 "Uno o más datos no son válidos.");
             resultado.Datos = errores;
+            resultado.IdentificadorTraza = System.Diagnostics.Activity.Current?.Id ?? contexto.HttpContext.TraceIdentifier;
 
             return new BadRequestObjectResult(resultado);
         };
     });
+// Toda excepción termina aquí: las de negocio como 400/404/409 y el resto como 500 con traceId
+constructor.Services.AddExceptionHandler<ManejadorGlobalExcepciones>();
+constructor.Services.AddProblemDetails();
+
 // Más información sobre OpenAPI: https://aka.ms/aspnet/openapi
 constructor.Services.AddOpenApi();
 constructor.Services.AddDbContext<ContextoAplicacion>(opciones =>
     opciones.UseSqlServer(constructor.Configuration.GetConnectionString("DefaultConnection")));
 
+// Catálogos (ubicaciones y tipos de mantenimiento)
+constructor.Services.AddScoped<ICatalogoRepository, CatalogoRepository>();
 constructor.Services.AddScoped<ICatalogoService, CatalogoService>();
 
 // CategoriaActivo
@@ -57,6 +80,18 @@ constructor.Services.AddScoped<IProveedorService, ProveedorService>();
 constructor.Services.AddScoped<IOrdenMantenimientoRepository, OrdenMantenimientoRepository>();
 constructor.Services.AddScoped<IOrdenMantenimientoService, OrdenMantenimientoService>();
 
+// Tecnico
+constructor.Services.AddScoped<ITecnicoRepository, TecnicoRepository>();
+constructor.Services.AddScoped<ITecnicoService, TecnicoService>();
+
+// Especialidad
+constructor.Services.AddScoped<IEspecialidadRepository, EspecialidadRepository>();
+constructor.Services.AddScoped<IEspecialidadService, EspecialidadService>();
+
+// Repuesto
+constructor.Services.AddScoped<IRepuestoRepository, RepuestoRepository>();
+constructor.Services.AddScoped<IRepuestoService, RepuestoService>();
+
 // Mapster: Pattern Mapper
 // 1. Registrar las configuraciones personalizadas
 ConfiguracionMapster.RegistrarMapeos();
@@ -72,6 +107,10 @@ var rutaImagenesActivos = Path.Combine(constructor.Environment.ContentRootPath, 
 constructor.Services.AddSingleton<IAlmacenamientoArchivosService>(new AlmacenamientoArchivosLocalService(rutaImagenesActivos));
 
 var aplicacion = constructor.Build();
+
+// Debe ir primero para capturar las excepciones de todo lo que sigue en la canalización
+aplicacion.UseExceptionHandler();
+aplicacion.UseSerilogRequestLogging();
 
 if (aplicacion.Environment.IsDevelopment())
 {

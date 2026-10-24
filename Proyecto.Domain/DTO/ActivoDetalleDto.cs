@@ -48,4 +48,22 @@ public class ActivoDetalleDto
     public string? NombreProveedor { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("createdAt")]
     public DateTime CreadoEn { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("category")]
+    public CategoriaResumenActivoDto? Categoria { get; set; }
+
+    // Campos calculados: no existen como columnas
+    // Meses completos desde la fecha de adquisición (mapper)
+    [System.Text.Json.Serialization.JsonPropertyName("ageInMonths")]
+    public int MesesAntiguedad { get; set; }
+    // Horas de uso acumuladas desde el último mantenimiento (mapper)
+    [System.Text.Json.Serialization.JsonPropertyName("hoursSinceLastMaintenance")]
+    public int HorasDesdeUltimoMantenimiento { get; set; }
+    // true cuando esas horas alcanzan el umbral preventivo de la categoría (mapper)
+    [System.Text.Json.Serialization.JsonPropertyName("preventiveMaintenanceDue")]
+    public bool RequierePreventivo { get; set; }
+    // Conteo hecho por SQL Server, sin cargar las órdenes (servicio + repositorio)
+    [System.Text.Json.Serialization.JsonPropertyName("maintenanceOrderCount")]
+    public int CantidadOrdenes { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("maintenanceOrders")]
+    public List<OrdenResumenActivoDto> OrdenesMantenimiento { get; set; } = [];
 }

@@ -1,45 +1,49 @@
 # Proyecto Mantenimiento de Activos
 
-API para administrar activos, categorías, ubicaciones, proveedores, técnicos y órdenes de mantenimiento.
+API para administrar activos de TI, categorías, ubicaciones, proveedores, repuestos, técnicos, especialidades y órdenes de mantenimiento.
 
 ## Requisitos
 
-- .NET SDK compatible con los proyectos de la solución.
+- .NET SDK 10.
 - SQL Server o SQL Server LocalDB.
 
 ## Base de datos
 
-La solución utiliza SQL Server y Entity Framework Core. En desarrollo, la API crea `MantenimientoActivosDbDev` en `(localdb)\MSSQLLocalDB` y carga los datos iniciales al arrancar.
+El modelo es Model First con Entity Framework Core: las entidades y `ContextoAplicacion` definen las tablas, y las migraciones de `Proyecto.Infraestructure/Migrations` las crean. En desarrollo, la API aplica las migraciones al arrancar (`MigrateAsync`) y los datos semilla de `Data/Seed/InicializadorCatalogos.cs` viajan dentro de las migraciones, así que no hay que insertar nada a mano.
 
-Para inicializarla desde la API, ejecuta desde `Proyecto.WebAPI`:
+Para recrear la base desde cero, desde la carpeta de la solución:
 
 ```powershell
-dotnet run
+dotnet ef database drop --project Proyecto.Infraestructure --startup-project Proyecto.WebAPI -- --environment Development
+dotnet ef database update --project Proyecto.Infraestructure --startup-project Proyecto.WebAPI -- --environment Development
 ```
 
-También puedes crearla manualmente ejecutando `database/MantenimientoActivos.sql` en SQL Server Management Studio o mediante `sqlcmd -f 65001 -i .\database\MantenimientoActivos.sql`. El script crea las tablas, relaciones, restricciones e inserciones de ejemplo; puede ejecutarse nuevamente sin duplicar esos datos.
-
-El modelo inicial incluye categorías, ubicaciones, proveedores, activos, tipos de mantenimiento y órdenes de mantenimiento. La cadena de conexión de desarrollo está en `Proyecto.WebAPI/appsettings.Development.json` y se puede reemplazar por la instancia de SQL Server del equipo.
+La cadena de conexión de desarrollo está en `Proyecto.WebAPI/appsettings.Development.json`.
 
 ## Compilar y probar
-
-Desde la carpeta que contiene `Proyecto.slnx`, ejecuta:
 
 ```powershell
 dotnet build Proyecto.slnx
 dotnet test Proyecto.slnx
 ```
 
-## Catálogos de la API
+La documentación de los endpoints está en Scalar: `/scalar` al ejecutar en Development.
 
-Los siguientes endpoints de consulta devuelven respuestas con el formato `Resultado<T>`:
+## Respuestas y errores
 
-| Endpoint | Contenido |
+Todas las respuestas usan `Resultado<T>` (`isSuccess`, `statusCode`, `title`, `detail`, `timestamp`, `data`). Los errores incluyen además `traceId`, el mismo identificador que queda en el log (`Proyecto.WebAPI/Logs`). Las reglas de negocio lanzan excepciones propias (`ExcepcionSolicitudInvalida` 400, `ExcepcionNoEncontrado` 404, `ExcepcionConflicto` 409) que traduce `ManejadorGlobalExcepciones`.
+
+## Endpoints
+
+| Recurso | Rutas |
 | --- | --- |
-| `GET /api/locations` | Ubicaciones activas, ordenadas por nombre. |
-| `GET /api/maintenance-types` | Tipos de mantenimiento y la especialidad requerida, si existe. |
-| `GET /api/specialties` | Especialidades registradas. |
-| `GET /api/technicians` y `GET /api/technicians/{id}` | Técnicos y sus certificaciones asociadas. |
-| `POST /api/technicians/{id}/specialties/{specialtyId}` y `DELETE /api/technicians/{id}/specialties/{specialtyId}` | Asignar una especialidad a un técnico y quitarla. |
+| Activos | `GET/POST /api/Asset` (filtros `categoryId` y `status`), `GET/PUT/DELETE /api/Asset/{id}`, `PATCH /api/Asset/{id}/status`, `POST/DELETE /api/Asset/{id}/image` |
+| Categorías | `GET/POST /api/AssetCategory`, `GET/PUT/DELETE /api/AssetCategory/{id}` |
+| Proveedores | `GET/POST /api/Supplier`, `GET/PUT/DELETE /api/Supplier/{id}` |
+| Repuestos | `GET/POST /api/SparePart`, `GET /api/SparePart/below-minimum`, `GET/PUT /api/SparePart/{id}`, `POST/PUT /api/SparePart/{id}/suppliers/{supplierId}` |
+| Técnicos | `GET/POST /api/technicians` (filtros `specialtyId` e `isAvailable`), `GET/PUT /api/technicians/{id}`, `POST/DELETE /api/technicians/{id}/specialties/{specialtyId}` |
+| Especialidades | `GET/POST /api/specialties`, `GET/PUT /api/specialties/{id}` |
+| Órdenes | `GET/POST /api/MaintenanceOrder`, `GET /api/MaintenanceOrder/{id}`, `GET /api/MaintenanceOrder/by-asset/{assetId}` |
+| Catálogos | `GET /api/locations`, `GET /api/maintenance-types` |
 
-Las solicitudes de ejemplo están en `Proyecto.WebAPI/Proyecto.WebAPI.http`.
+Las listas principales también tienen paginación: `GET /api/{recurso}/{pageNumber}/{pageSize}`.

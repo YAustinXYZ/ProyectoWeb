@@ -12,6 +12,8 @@ public class OrdenMantenimientoDetalleDto
     public string? CodigoActivo { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("assetName")]
     public string? NombreActivo { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("asset")]
+    public ActivoResumenOrdenDto? Activo { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("maintenanceTypeId")]
     public int TipoMantenimientoId { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("maintenanceTypeName")]
@@ -34,6 +36,9 @@ public class OrdenMantenimientoDetalleDto
     public string? Estado { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("requestedAt")]
     public DateTime SolicitadoEn { get; set; }
+    // Calculado en el mapper a partir de SolicitadoEn; no existe como columna
+    [System.Text.Json.Serialization.JsonPropertyName("daysSinceRequest")]
+    public int DiasDesdeSolicitud { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("scheduledFor")]
     public DateTime? ProgramadoPara { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("startedAt")]

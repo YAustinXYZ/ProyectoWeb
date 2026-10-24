@@ -5,10 +5,11 @@ namespace Proyecto.Infraestructure.Interfaces;
 public interface IActivoRepository
 {
     // Lectura
-    Task<IEnumerable<Activo>> ObtenerTodosAsync();
-    Task<IEnumerable<Activo>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina);
-    Task<int> ContarAsync();
+    Task<IEnumerable<Activo>> ObtenerTodosAsync(int? categoriaId = null, string? estado = null);
+    Task<IEnumerable<Activo>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina, int? categoriaId = null, string? estado = null);
+    Task<int> ContarAsync(int? categoriaId = null, string? estado = null);
     Task<Activo?> ObtenerPorIdentificadorAsync(int id);
+    Task<Dictionary<int, int>> ContarOrdenesPorActivoAsync(IEnumerable<int> idsActivos);
     Task<Activo?> ObtenerParaActualizarAsync(int id);
 
     // Verificaciones para las reglas de negocio

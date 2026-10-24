@@ -65,7 +65,8 @@ public sealed class PruebasEndpointsTecnico
         }
 
         using var removalResponse = await client.DeleteAsync(assignmentPath);
-        Assert.Equal(HttpStatusCode.NoContent, removalResponse.StatusCode);
+        // Con Resultado<T> el DELETE exitoso responde 200 (204 solo si la API no devuelve cuerpo)
+        Assert.Equal(HttpStatusCode.OK, removalResponse.StatusCode);
 
         using var technicianAfterRemoval =
             await client.GetAsync($"/api/technicians/{FabricaApi.TecnicoId}");

@@ -13,4 +13,5 @@ public class Proveedor
     public bool EstaActivo { get; set; } = true;
     public ICollection<Activo> Activos { get; set; } = new List<Activo>();
     public ICollection<OrdenMantenimiento> OrdenesMantenimiento { get; set; } = new List<OrdenMantenimiento>();
+    public ICollection<RepuestoProveedor> RepuestosProveedor { get; set; } = new List<RepuestoProveedor>();
 }

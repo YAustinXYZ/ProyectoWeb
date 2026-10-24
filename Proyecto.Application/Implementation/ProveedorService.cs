@@ -3,6 +3,7 @@ using Proyecto.Application.Interfaces;
 using Proyecto.Domain.DTO;
 using Proyecto.Domain.DTO.ResultadoPatron;
 using Proyecto.Domain.Entities;
+using Proyecto.Domain.Excepciones;
 using Proyecto.Infraestructure.Interfaces;
 
 namespace Proyecto.Application.Implementation;
@@ -37,8 +38,7 @@ public class ProveedorService : IProveedorService
     public async Task<Resultado<IEnumerable<ProveedorListaDto>>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina)
     {
         if (paginaNumero < 1 || tamanoPagina < 1 || tamanoPagina > TamanoMaximoPagina)
-            return Resultado<IEnumerable<ProveedorListaDto>>.Fallo(400, "Solicitud incorrecta",
-                $"El número de página debe ser 1 o mayor y el tamaño debe estar entre 1 y {TamanoMaximoPagina}.");
+            throw new ExcepcionSolicitudInvalida($"El número de página debe ser 1 o mayor y el tamaño debe estar entre 1 y {TamanoMaximoPagina}.");
 
         var suppliers = await _repositorio.ObtenerPaginacionAsync(paginaNumero, tamanoPagina);
         var registrosTotales = await _repositorio.ContarAsync();
@@ -55,7 +55,7 @@ public class ProveedorService : IProveedorService
         var proveedor = await _repositorio.ObtenerPorIdentificadorAsync(id);
 
         if (proveedor is null)
-            return Resultado<ProveedorDetalleDto>.Fallo(404, "No encontrado", $"El proveedor {id} no existe.");
+            throw new ExcepcionNoEncontrado($"El proveedor {id} no existe.");
 
         var datos = _mapeador.Map<ProveedorDetalleDto>(proveedor);
 
@@ -69,8 +69,7 @@ public class ProveedorService : IProveedorService
     {
         // Regla de negocio: la cédula jurídica no se puede repetir
         if (await _repositorio.ExistePorIdentificacionFiscalAsync(proveedor.IdentificacionFiscal!))
-            return Resultado<ProveedorDetalleDto>.Fallo(409, "Conflicto",
-                $"Ya existe un proveedor con la cédula jurídica {proveedor.IdentificacionFiscal}.");
+            throw new ExcepcionConflicto($"Ya existe un proveedor con la cédula jurídica {proveedor.IdentificacionFiscal}.");
 
         var entidad = _mapeador.Map<Proveedor>(proveedor);
         entidad.EstaActivo = true;                    // Todo proveedor nuevo se crea activo
@@ -89,19 +88,21 @@ public class ProveedorService : IProveedorService
     public async Task<Resultado<ProveedorDetalleDto>> ActualizarAsync(int id, ProveedorActualizarDto proveedor)
     {
         if (!await _repositorio.ExisteAsync(id))
-            return Resultado<ProveedorDetalleDto>.Fallo(404, "No encontrado", $"El proveedor {id} no existe.");
+            throw new ExcepcionNoEncontrado($"El proveedor {id} no existe.");
 
         // Misma regla, excluyendo al proveedor que se edita
         if (await _repositorio.ExistePorIdentificacionFiscalAsync(proveedor.IdentificacionFiscal!, id))
-            return Resultado<ProveedorDetalleDto>.Fallo(409, "Conflicto",
-                $"Ya existe un proveedor con la cédula jurídica {proveedor.IdentificacionFiscal}.");
+            throw new ExcepcionConflicto($"Ya existe un proveedor con la cédula jurídica {proveedor.IdentificacionFiscal}.");
 
         var entidad = _mapeador.Map<Proveedor>(proveedor);
         entidad.Identificador = id;                            // El Identificador se toma de la ruta, no del body
 
         await _repositorio.ActualizarAsync(entidad);
 
-        var datos = _mapeador.Map<ProveedorDetalleDto>(entidad);
+        // Se vuelve a consultar para devolver también los repuestos que suministra
+        var actualizado = await _repositorio.ObtenerPorIdentificadorAsync(id);
+
+        var datos = _mapeador.Map<ProveedorDetalleDto>(actualizado!);
 
         var resultado = Resultado<ProveedorDetalleDto>.Exito(datos, 200, "Correcto", "Registro actualizado.");
 
@@ -113,12 +114,11 @@ public class ProveedorService : IProveedorService
     public async Task<Resultado<int>> EliminarAsync(int id)
     {
         if (!await _repositorio.ExisteAsync(id))
-            return Resultado<int>.Fallo(404, "No encontrado", $"El proveedor {id} no existe.");
+            throw new ExcepcionNoEncontrado($"El proveedor {id} no existe.");
 
         // Regla de negocio: no se elimina un proveedor con activos u órdenes de mantenimiento asociados
         if (await _repositorio.TieneRegistrosRelacionadosAsync(id))
-            return Resultado<int>.Fallo(409, "Conflicto",
-                $"El proveedor {id} tiene activos u órdenes de mantenimiento asociados y no se puede eliminar.");
+            throw new ExcepcionConflicto($"El proveedor {id} tiene activos, órdenes de mantenimiento o repuestos asociados y no se puede eliminar.");
 
         await _repositorio.EliminarAsync(id);
 

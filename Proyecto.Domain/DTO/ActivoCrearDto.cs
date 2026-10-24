@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Proyecto.Domain.Validaciones;
 
 namespace Proyecto.Domain.DTO;
 
@@ -27,6 +28,7 @@ public class ActivoCrearDto
 
     [Required(ErrorMessage = "La fecha de adquisición es obligatoria.")]
     [System.Text.Json.Serialization.JsonPropertyName("acquiredOn")]
+    [FechaNoFutura(ErrorMessage = "La fecha de adquisición no puede estar en el futuro.")]
     public DateTime? FechaAdquisicion { get; set; }
 
     [Range(0, 999999999.99, ErrorMessage = "El costo de compra debe estar entre 0 y 999999999.99.")]

@@ -22,4 +22,7 @@ public class OrdenMantenimientoListaDto
     public string? Estado { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("requestedAt")]
     public DateTime SolicitadoEn { get; set; }
+    // Calculado en el mapper a partir de SolicitadoEn; no existe como columna
+    [System.Text.Json.Serialization.JsonPropertyName("daysSinceRequest")]
+    public int DiasDesdeSolicitud { get; set; }
 }

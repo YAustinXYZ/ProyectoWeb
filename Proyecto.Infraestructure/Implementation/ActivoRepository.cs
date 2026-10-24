@@ -16,9 +16,29 @@ public class ActivoRepository : IActivoRepository
 
     // Consultas de lectura sin seguimiento de cambios (AsNoTracking)
 
-    public async Task<IEnumerable<Activo>> ObtenerTodosAsync()
+    // Estado de baja lógica: equivale al Status = false del patrón visto en clase
+    private const string EstadoBaja = "Decommissioned";
+
+    // Filtros opcionales: si un parámetro llega null, no se aplica.
+    // Sin filtro de estado, el listado oculta los activos dados de baja (como Status == true en clase);
+    // con status=Decommissioned se pueden consultar.
+    private IQueryable<Activo> Filtrar(int? categoriaId, string? estado)
     {
-        var resultado = await _contexto.Activos
+        var consulta = _contexto.Activos.AsQueryable();
+
+        if (categoriaId is not null)
+            consulta = consulta.Where(a => a.CategoriaActivoId == categoriaId);
+
+        consulta = string.IsNullOrWhiteSpace(estado)
+            ? consulta.Where(a => a.Estado != EstadoBaja)
+            : consulta.Where(a => a.Estado == estado);
+
+        return consulta;
+    }
+
+    public async Task<IEnumerable<Activo>> ObtenerTodosAsync(int? categoriaId = null, string? estado = null)
+    {
+        var resultado = await Filtrar(categoriaId, estado)
             .AsNoTracking()
             .Include(a => a.Categoria)
             .Include(a => a.Ubicacion)
@@ -28,9 +48,9 @@ public class ActivoRepository : IActivoRepository
         return resultado;
     }
 
-    public async Task<IEnumerable<Activo>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina)
+    public async Task<IEnumerable<Activo>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina, int? categoriaId = null, string? estado = null)
     {
-        var resultado = await _contexto.Activos
+        var resultado = await Filtrar(categoriaId, estado)
             .AsNoTracking()
             .Include(a => a.Categoria)
             .Include(a => a.Ubicacion)
@@ -43,9 +63,25 @@ public class ActivoRepository : IActivoRepository
     }
 
     // Cantidad total de registros, utilizada en la paginación
-    public async Task<int> ContarAsync()
+    // Cuenta con los mismos filtros del listado para que totalRecords sea coherente
+    public async Task<int> ContarAsync(int? categoriaId = null, string? estado = null)
     {
-        var resultado = await _contexto.Activos.CountAsync();
+        var resultado = await Filtrar(categoriaId, estado).CountAsync();
+
+        return resultado;
+    }
+
+    // Un solo SELECT ... GROUP BY ActivoId: SQL Server cuenta, no se traen las órdenes a memoria.
+    // Los activos sin órdenes no aparecen en el diccionario; el servicio los toma como 0.
+    public async Task<Dictionary<int, int>> ContarOrdenesPorActivoAsync(IEnumerable<int> idsActivos)
+    {
+        var ids = idsActivos.ToList();
+
+        var resultado = await _contexto.OrdenesMantenimiento
+            .Where(o => ids.Contains(o.ActivoId))
+            .GroupBy(o => o.ActivoId)
+            .Select(grupo => new { ActivoId = grupo.Key, Cantidad = grupo.Count() })
+            .ToDictionaryAsync(x => x.ActivoId, x => x.Cantidad);
 
         return resultado;
     }
@@ -57,16 +93,21 @@ public class ActivoRepository : IActivoRepository
             .Include(a => a.Categoria)
             .Include(a => a.Ubicacion)
             .Include(a => a.Proveedor)
+            // Historial resumido para el detalle, de la orden más reciente a la más antigua
+            .Include(a => a.OrdenesMantenimiento.OrderByDescending(o => o.SolicitadoEn))
+                .ThenInclude(o => o.TipoMantenimiento)
             .FirstOrDefaultAsync(a => a.Identificador == id);
 
         return resultado;
     }
 
-    // Con seguimiento de cambios: SaveChangesAsync actualiza solo las columnas modificadas
+    // Con seguimiento de cambios: SaveChangesAsync actualiza solo las columnas modificadas.
+    // Igual que GetForUpdateAsync de clase, excluye los registros dados de baja: para editar,
+    // cambiar estado, dar de baja o cambiar la imagen, un activo Decommissioned ya no existe (404).
     public async Task<Activo?> ObtenerParaActualizarAsync(int id)
     {
         var resultado = await _contexto.Activos
-            .FirstOrDefaultAsync(a => a.Identificador == id);
+            .FirstOrDefaultAsync(a => a.Identificador == id && a.Estado != EstadoBaja);
 
         return resultado;
     }

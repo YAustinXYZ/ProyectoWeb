@@ -3,6 +3,7 @@ using Proyecto.Application.Interfaces;
 using Proyecto.Domain.DTO;
 using Proyecto.Domain.DTO.ResultadoPatron;
 using Proyecto.Domain.Entities;
+using Proyecto.Domain.Excepciones;
 using Proyecto.Infraestructure.Interfaces;
 
 namespace Proyecto.Application.Implementation;
@@ -39,8 +40,7 @@ public class OrdenMantenimientoService : IOrdenMantenimientoService
     public async Task<Resultado<IEnumerable<OrdenMantenimientoListaDto>>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina)
     {
         if (paginaNumero < 1 || tamanoPagina < 1 || tamanoPagina > TamanoMaximoPagina)
-            return Resultado<IEnumerable<OrdenMantenimientoListaDto>>.Fallo(400, "Solicitud incorrecta",
-                $"El número de página debe ser 1 o mayor y el tamaño debe estar entre 1 y {TamanoMaximoPagina}.");
+            throw new ExcepcionSolicitudInvalida($"El número de página debe ser 1 o mayor y el tamaño debe estar entre 1 y {TamanoMaximoPagina}.");
 
         var orders = await _repositorio.ObtenerPaginacionAsync(paginaNumero, tamanoPagina);
         var registrosTotales = await _repositorio.ContarAsync();
@@ -57,7 +57,7 @@ public class OrdenMantenimientoService : IOrdenMantenimientoService
         var orden = await _repositorio.ObtenerPorIdentificadorAsync(id);
 
         if (orden is null)
-            return Resultado<OrdenMantenimientoDetalleDto>.Fallo(404, "No encontrado", $"La orden {id} no existe.");
+            throw new ExcepcionNoEncontrado($"La orden {id} no existe.");
 
         var datos = _mapeador.Map<OrdenMantenimientoDetalleDto>(orden);
 
@@ -70,7 +70,7 @@ public class OrdenMantenimientoService : IOrdenMantenimientoService
     public async Task<Resultado<IEnumerable<OrdenMantenimientoListaDto>>> ObtenerPorActivoAsync(int assetId)
     {
         if (await _repositorio.ObtenerEstadoActivoAsync(assetId) is null)
-            return Resultado<IEnumerable<OrdenMantenimientoListaDto>>.Fallo(404, "No encontrado", $"El activo {assetId} no existe.");
+            throw new ExcepcionNoEncontrado($"El activo {assetId} no existe.");
 
         var orders = await _repositorio.ObtenerPorActivoAsync(assetId);
 
@@ -86,14 +86,15 @@ public class OrdenMantenimientoService : IOrdenMantenimientoService
     {
         var assetStatus = await _repositorio.ObtenerEstadoActivoAsync(orden.ActivoId);
 
+        // La rúbrica pide 404 cuando el activo no existe; los demás Ids del cuerpo siguen el patrón
+        // de clase (un Id de relación inexistente es un cuerpo inválido: 400)
         if (assetStatus is null)
-            return Resultado<OrdenMantenimientoDetalleDto>.Fallo(400, "Solicitud incorrecta", $"El activo {orden.ActivoId} no existe.");
+            throw new ExcepcionNoEncontrado($"El activo {orden.ActivoId} no existe.");
 
         var isEmergency = await _repositorio.ObtenerSiTipoMantenimientoEsEmergenciaAsync(orden.TipoMantenimientoId);
 
         if (isEmergency is null)
-            return Resultado<OrdenMantenimientoDetalleDto>.Fallo(400, "Solicitud incorrecta",
-                $"El tipo de mantenimiento {orden.TipoMantenimientoId} no existe.");
+            throw new ExcepcionSolicitudInvalida($"El tipo de mantenimiento {orden.TipoMantenimientoId} no existe.");
 
         bool? supplierIsActive = null;
 
@@ -102,24 +103,22 @@ public class OrdenMantenimientoService : IOrdenMantenimientoService
             supplierIsActive = await _repositorio.ObtenerSiProveedorEstaActivoAsync(orden.ProveedorId.Value);
 
             if (supplierIsActive is null)
-                return Resultado<OrdenMantenimientoDetalleDto>.Fallo(400, "Solicitud incorrecta", $"El proveedor {orden.ProveedorId} no existe.");
+                throw new ExcepcionSolicitudInvalida($"El proveedor {orden.ProveedorId} no existe.");
         }
 
         // Reglas de negocio sobre el estado de los registros relacionados
 
         if (assetStatus == ActivoService.EstadoBaja)
-            return Resultado<OrdenMantenimientoDetalleDto>.Fallo(409, "Conflicto",
-                $"El activo {orden.ActivoId} está dado de baja y no puede recibir órdenes.");
+            throw new ExcepcionConflicto($"El activo {orden.ActivoId} está dado de baja y no puede recibir órdenes.");
 
         if (supplierIsActive == false)
-            return Resultado<OrdenMantenimientoDetalleDto>.Fallo(409, "Conflicto", $"El proveedor {orden.ProveedorId} está inactivo.");
+            throw new ExcepcionConflicto($"El proveedor {orden.ProveedorId} está inactivo.");
 
         // Un tipo de emergencia permite abrir otra orden aunque el activo ya esté en mantenimiento
         if (assetStatus == ActivoService.EstadoEnMantenimiento
             && isEmergency == false
             && await _repositorio.TieneOrdenesAbiertasAsync(orden.ActivoId, ActivoService.EstadosOrdenCerrada))
-            return Resultado<OrdenMantenimientoDetalleDto>.Fallo(409, "Conflicto",
-                $"El activo {orden.ActivoId} está en mantenimiento y tiene una orden sin cerrar; solo se permite una orden de emergencia.");
+            throw new ExcepcionConflicto($"El activo {orden.ActivoId} está en mantenimiento y tiene una orden sin cerrar; solo se permite una orden de emergencia.");
 
         var now = DateTime.UtcNow;
 

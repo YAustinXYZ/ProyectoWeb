@@ -50,6 +50,8 @@ public class ProveedorRepository : IProveedorRepository
     {
         var resultado = await _contexto.Proveedores
             .AsNoTracking()
+            .Include(s => s.RepuestosProveedor)                // Repuestos que suministra (detalle)
+                .ThenInclude(enlace => enlace.Repuesto)
             .FirstOrDefaultAsync(s => s.Identificador == id);
 
         return resultado;
@@ -80,7 +82,7 @@ public class ProveedorRepository : IProveedorRepository
     {
         var resultado = await _contexto.Proveedores
             .Where(s => s.Identificador == id)
-            .AnyAsync(s => s.Activos.Any() || s.OrdenesMantenimiento.Any());
+            .AnyAsync(s => s.Activos.Any() || s.OrdenesMantenimiento.Any() || s.RepuestosProveedor.Any());
 
         return resultado;
     }

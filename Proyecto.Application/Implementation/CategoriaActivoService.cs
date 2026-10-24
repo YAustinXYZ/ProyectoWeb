@@ -3,6 +3,7 @@ using Proyecto.Application.Interfaces;
 using Proyecto.Domain.DTO;
 using Proyecto.Domain.DTO.ResultadoPatron;
 using Proyecto.Domain.Entities;
+using Proyecto.Domain.Excepciones;
 using Proyecto.Infraestructure.Interfaces;
 
 namespace Proyecto.Application.Implementation;
@@ -27,7 +28,7 @@ public class CategoriaActivoService : ICategoriaActivoService
     {
         var categories = await _repositorio.ObtenerTodosAsync();
 
-        var datos = _mapeador.Map<IEnumerable<CategoriaActivoListaDto>>(categories);
+        var datos = await MapearListaConConteoAsync(categories);
 
         var resultado = Resultado<IEnumerable<CategoriaActivoListaDto>>.Exito(datos);
 
@@ -37,13 +38,12 @@ public class CategoriaActivoService : ICategoriaActivoService
     public async Task<Resultado<IEnumerable<CategoriaActivoListaDto>>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina)
     {
         if (paginaNumero < 1 || tamanoPagina < 1 || tamanoPagina > TamanoMaximoPagina)
-            return Resultado<IEnumerable<CategoriaActivoListaDto>>.Fallo(400, "Solicitud incorrecta",
-                $"El número de página debe ser 1 o mayor y el tamaño debe estar entre 1 y {TamanoMaximoPagina}.");
+            throw new ExcepcionSolicitudInvalida($"El número de página debe ser 1 o mayor y el tamaño debe estar entre 1 y {TamanoMaximoPagina}.");
 
         var categories = await _repositorio.ObtenerPaginacionAsync(paginaNumero, tamanoPagina);
         var registrosTotales = await _repositorio.ContarAsync();
 
-        var datos = _mapeador.Map<IEnumerable<CategoriaActivoListaDto>>(categories);
+        var datos = await MapearListaConConteoAsync(categories);
 
         var resultado = Resultado<IEnumerable<CategoriaActivoListaDto>>.Paginado(datos, paginaNumero, tamanoPagina, registrosTotales);
 
@@ -55,9 +55,11 @@ public class CategoriaActivoService : ICategoriaActivoService
         var categoria = await _repositorio.ObtenerPorIdentificadorAsync(id);
 
         if (categoria is null)
-            return Resultado<CategoriaActivoDetalleDto>.Fallo(404, "No encontrado", $"La categoría {id} no existe.");
+            throw new ExcepcionNoEncontrado($"La categoría {id} no existe.");
 
         var datos = _mapeador.Map<CategoriaActivoDetalleDto>(categoria);
+        var conteos = await _repositorio.ContarActivosPorCategoriaAsync([id]);
+        datos.CantidadActivos = conteos.GetValueOrDefault(id);     // Coincide con datos.Activos.Count
 
         var resultado = Resultado<CategoriaActivoDetalleDto>.Exito(datos);
 
@@ -69,13 +71,11 @@ public class CategoriaActivoService : ICategoriaActivoService
     {
         // Regla de negocio: el nombre no se puede repetir
         if (await _repositorio.ExistePorNombreAsync(categoria.Nombre!))
-            return Resultado<CategoriaActivoDetalleDto>.Fallo(409, "Conflicto",
-                $"Ya existe una categoría con el nombre {categoria.Nombre}.");
+            throw new ExcepcionConflicto($"Ya existe una categoría con el nombre {categoria.Nombre}.");
 
         // Regla de negocio: el prefijo de código no se puede repetir
         if (await _repositorio.ExistePorPrefijoCodigoAsync(categoria.PrefijoCodigo!))
-            return Resultado<CategoriaActivoDetalleDto>.Fallo(409, "Conflicto",
-                $"Ya existe una categoría con el prefijo {categoria.PrefijoCodigo}.");
+            throw new ExcepcionConflicto($"Ya existe una categoría con el prefijo {categoria.PrefijoCodigo}.");
 
         var entidad = _mapeador.Map<CategoriaActivo>(categoria);
         entidad.EstaActivo = true;                    // Toda categoría nueva se crea activa
@@ -94,27 +94,37 @@ public class CategoriaActivoService : ICategoriaActivoService
     public async Task<Resultado<CategoriaActivoDetalleDto>> ActualizarAsync(int id, CategoriaActivoActualizarDto categoria)
     {
         if (!await _repositorio.ExisteAsync(id))
-            return Resultado<CategoriaActivoDetalleDto>.Fallo(404, "No encontrado", $"La categoría {id} no existe.");
+            throw new ExcepcionNoEncontrado($"La categoría {id} no existe.");
 
         // Misma regla, excluyendo a la categoría que se edita
         if (await _repositorio.ExistePorNombreAsync(categoria.Nombre!, id))
-            return Resultado<CategoriaActivoDetalleDto>.Fallo(409, "Conflicto",
-                $"Ya existe una categoría con el nombre {categoria.Nombre}.");
+            throw new ExcepcionConflicto($"Ya existe una categoría con el nombre {categoria.Nombre}.");
 
         if (await _repositorio.ExistePorPrefijoCodigoAsync(categoria.PrefijoCodigo!, id))
-            return Resultado<CategoriaActivoDetalleDto>.Fallo(409, "Conflicto",
-                $"Ya existe una categoría con el prefijo {categoria.PrefijoCodigo}.");
+            throw new ExcepcionConflicto($"Ya existe una categoría con el prefijo {categoria.PrefijoCodigo}.");
 
         var entidad = _mapeador.Map<CategoriaActivo>(categoria);
         entidad.Identificador = id;                            // El Identificador se toma de la ruta, no del body
 
         await _repositorio.ActualizarAsync(entidad);
 
-        var datos = _mapeador.Map<CategoriaActivoDetalleDto>(entidad);
+        // Se vuelve a consultar para devolver también sus activos y el conteo
+        var actualizada = await ObtenerPorIdentificadorAsync(id);
 
-        var resultado = Resultado<CategoriaActivoDetalleDto>.Exito(datos, 200, "Correcto", "Registro actualizado.");
+        var resultado = Resultado<CategoriaActivoDetalleDto>.Exito(actualizada.Datos!, 200, "Correcto", "Registro actualizado.");
 
         return resultado;
+    }
+
+    private async Task<IEnumerable<CategoriaActivoListaDto>> MapearListaConConteoAsync(IEnumerable<CategoriaActivo> categorias)
+    {
+        var datos = _mapeador.Map<List<CategoriaActivoListaDto>>(categorias);
+        var conteos = await _repositorio.ContarActivosPorCategoriaAsync(datos.Select(c => c.Identificador));
+
+        foreach (var categoria in datos)
+            categoria.CantidadActivos = conteos.GetValueOrDefault(categoria.Identificador);
+
+        return datos;
     }
 
     // ELIMINAR
@@ -122,12 +132,11 @@ public class CategoriaActivoService : ICategoriaActivoService
     public async Task<Resultado<int>> EliminarAsync(int id)
     {
         if (!await _repositorio.ExisteAsync(id))
-            return Resultado<int>.Fallo(404, "No encontrado", $"La categoría {id} no existe.");
+            throw new ExcepcionNoEncontrado($"La categoría {id} no existe.");
 
         // Regla de negocio: no se elimina una categoría con activos asociados
         if (await _repositorio.TieneActivosAsync(id))
-            return Resultado<int>.Fallo(409, "Conflicto",
-                $"La categoría {id} tiene activos asociados y no se puede eliminar.");
+            throw new ExcepcionConflicto($"La categoría {id} tiene activos asociados y no se puede eliminar.");
 
         await _repositorio.EliminarAsync(id);
 

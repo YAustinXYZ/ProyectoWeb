@@ -20,4 +20,7 @@ public class ProveedorDetalleDto
     public string? CondicionesGenerales { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("isActive")]
     public bool EstaActivo { get; set; }
+    // Repuestos que suministra, con el precio y el tiempo de entrega de cada uno
+    [System.Text.Json.Serialization.JsonPropertyName("spareParts")]
+    public List<ProveedorRepuestoDto> Repuestos { get; set; } = [];
 }

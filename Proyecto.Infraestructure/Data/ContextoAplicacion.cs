@@ -15,6 +15,8 @@ public class ContextoAplicacion(DbContextOptions<ContextoAplicacion> options) : 
     public DbSet<Tecnico> Tecnicos => Set<Tecnico>();
     public DbSet<Especialidad> Especialidades => Set<Especialidad>();
     public DbSet<TecnicoEspecialidad> EspecialidadesTecnico => Set<TecnicoEspecialidad>();
+    public DbSet<Repuesto> Repuestos => Set<Repuesto>();
+    public DbSet<RepuestoProveedor> RepuestosProveedor => Set<RepuestoProveedor>();
 
     protected override void OnModelCreating(ModelBuilder constructorModelo)
     {
@@ -179,6 +181,46 @@ public class ContextoAplicacion(DbContextOptions<ContextoAplicacion> options) : 
                 .HasForeignKey(link => link.TecnicoId).OnDelete(DeleteBehavior.Restrict);
             entidad.HasOne(link => link.Especialidad).WithMany(especialidad => especialidad.EspecialidadesTecnico)
                 .HasForeignKey(link => link.EspecialidadId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        constructorModelo.Entity<Repuesto>(entidad =>
+        {
+            entidad.ToTable("SpareParts", table =>
+            {
+                // El stock nunca puede ser negativo: se valida en el DTO y la base de datos lo garantiza
+                table.HasCheckConstraint("CK_SpareParts_Stock", "[CurrentStock] >= 0 AND [MinimumStock] >= 0");
+                table.HasCheckConstraint("CK_SpareParts_UnitOfMeasure",
+                    "[UnitOfMeasure] IN ('Unit', 'Box', 'Pack', 'Meter', 'Roll', 'Kit')");
+            });
+            entidad.HasKey(repuesto => repuesto.Identificador);
+            entidad.Property(repuesto => repuesto.Identificador).HasColumnName("Id");
+            entidad.Property(repuesto => repuesto.Codigo).HasColumnName("Code").HasMaxLength(30).IsRequired();
+            entidad.Property(repuesto => repuesto.Nombre).HasColumnName("Name").HasMaxLength(120).IsRequired();
+            entidad.Property(repuesto => repuesto.Descripcion).HasColumnName("Description").HasMaxLength(500);
+            entidad.Property(repuesto => repuesto.UnidadMedida).HasColumnName("UnitOfMeasure").HasMaxLength(10).IsRequired();
+            entidad.Property(repuesto => repuesto.StockActual).HasColumnName("CurrentStock");
+            entidad.Property(repuesto => repuesto.StockMinimo).HasColumnName("MinimumStock");
+            entidad.Property(repuesto => repuesto.CreadoEn).HasColumnName("CreatedAt").HasDefaultValueSql("SYSUTCDATETIME()");
+            entidad.HasIndex(repuesto => repuesto.Codigo).IsUnique();
+        });
+
+        constructorModelo.Entity<RepuestoProveedor>(entidad =>
+        {
+            entidad.ToTable("SparePartSuppliers", table =>
+            {
+                table.HasCheckConstraint("CK_SparePartSuppliers_OfferedPrice", "[OfferedPrice] >= 0");
+                table.HasCheckConstraint("CK_SparePartSuppliers_LeadTimeDays", "[EstimatedLeadTimeDays] >= 0");
+            });
+            // Llave compuesta: un proveedor aparece una sola vez por repuesto
+            entidad.HasKey(enlace => new { enlace.RepuestoId, enlace.ProveedorId });
+            entidad.Property(enlace => enlace.RepuestoId).HasColumnName("SparePartId");
+            entidad.Property(enlace => enlace.ProveedorId).HasColumnName("SupplierId");
+            entidad.Property(enlace => enlace.PrecioOfrecido).HasColumnName("OfferedPrice").HasPrecision(18, 2);
+            entidad.Property(enlace => enlace.DiasEntregaEstimados).HasColumnName("EstimatedLeadTimeDays");
+            entidad.HasOne(enlace => enlace.Repuesto).WithMany(repuesto => repuesto.ProveedoresRepuesto)
+                .HasForeignKey(enlace => enlace.RepuestoId).OnDelete(DeleteBehavior.Restrict);
+            entidad.HasOne(enlace => enlace.Proveedor).WithMany(proveedor => proveedor.RepuestosProveedor)
+                .HasForeignKey(enlace => enlace.ProveedorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         constructorModelo.Entity<CategoriaActivo>().Property(entidad => entidad.Identificador).HasColumnName("Id");

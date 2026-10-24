@@ -14,4 +14,12 @@ public abstract class ResultadoBase
     public string Titulo { get; set; } = "";
     [System.Text.Json.Serialization.JsonPropertyName("detail")]
     public string Detalle { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonPropertyName("timestamp")]
+    public DateTime MarcaTiempo { get; set; } = DateTime.UtcNow;
+
+    // Solo las respuestas de error llevan traceId: es el mismo identificador que queda en el log
+    [System.Text.Json.Serialization.JsonPropertyName("traceId")]
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? IdentificadorTraza { get; set; }
 }

@@ -4,6 +4,7 @@ using Proyecto.Application.Mapper;
 using Proyecto.Domain.DTO;
 using Proyecto.Domain.DTO.ResultadoPatron;
 using Proyecto.Domain.Entities;
+using Proyecto.Domain.Excepciones;
 using Proyecto.Infraestructure.Interfaces;
 
 namespace Proyecto.Application.Implementation;
@@ -35,27 +36,26 @@ public class ActivoService : IActivoService
 
     // CONSULTA
 
-    public async Task<Resultado<IEnumerable<ActivoListaDto>>> ObtenerTodosAsync()
+    public async Task<Resultado<IEnumerable<ActivoListaDto>>> ObtenerTodosAsync(int? categoriaId = null, string? estado = null)
     {
-        var assets = await _repositorio.ObtenerTodosAsync();
+        var assets = await _repositorio.ObtenerTodosAsync(categoriaId, estado);
 
-        var datos = _mapeador.Map<IEnumerable<ActivoListaDto>>(assets);
+        var datos = await MapearListaConConteoAsync(assets);
 
         var resultado = Resultado<IEnumerable<ActivoListaDto>>.Exito(datos);
 
         return resultado;
     }
 
-    public async Task<Resultado<IEnumerable<ActivoListaDto>>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina)
+    public async Task<Resultado<IEnumerable<ActivoListaDto>>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina, int? categoriaId = null, string? estado = null)
     {
         if (paginaNumero < 1 || tamanoPagina < 1 || tamanoPagina > TamanoMaximoPagina)
-            return Resultado<IEnumerable<ActivoListaDto>>.Fallo(400, "Solicitud incorrecta",
-                $"El número de página debe ser 1 o mayor y el tamaño debe estar entre 1 y {TamanoMaximoPagina}.");
+            throw new ExcepcionSolicitudInvalida($"El número de página debe ser 1 o mayor y el tamaño debe estar entre 1 y {TamanoMaximoPagina}.");
 
-        var assets = await _repositorio.ObtenerPaginacionAsync(paginaNumero, tamanoPagina);
-        var registrosTotales = await _repositorio.ContarAsync();
+        var assets = await _repositorio.ObtenerPaginacionAsync(paginaNumero, tamanoPagina, categoriaId, estado);
+        var registrosTotales = await _repositorio.ContarAsync(categoriaId, estado);
 
-        var datos = _mapeador.Map<IEnumerable<ActivoListaDto>>(assets);
+        var datos = await MapearListaConConteoAsync(assets);
 
         var resultado = Resultado<IEnumerable<ActivoListaDto>>.Paginado(datos, paginaNumero, tamanoPagina, registrosTotales);
 
@@ -64,12 +64,13 @@ public class ActivoService : IActivoService
 
     public async Task<Resultado<ActivoDetalleDto>> ObtenerPorIdentificadorAsync(int id)
     {
+        // La consulta por id sí muestra un activo dado de baja: su estado y su historial se siguen consultando
         var activo = await _repositorio.ObtenerPorIdentificadorAsync(id);
 
         if (activo is null)
-            return Resultado<ActivoDetalleDto>.Fallo(404, "No encontrado", $"El activo {id} no existe.");
+            throw new ExcepcionNoEncontrado($"El activo {id} no existe.");
 
-        var datos = _mapeador.Map<ActivoDetalleDto>(activo);
+        var datos = await MapearDetalleAsync(activo);
 
         var resultado = Resultado<ActivoDetalleDto>.Exito(datos);
 
@@ -82,18 +83,17 @@ public class ActivoService : IActivoService
         var codePrefix = await _repositorio.ObtenerPrefijoCodigoCategoriaAsync(activo.CategoriaActivoId);
 
         if (codePrefix is null)
-            return Resultado<ActivoDetalleDto>.Fallo(400, "Solicitud incorrecta", $"La categoría {activo.CategoriaActivoId} no existe.");
+            throw new ExcepcionSolicitudInvalida($"La categoría {activo.CategoriaActivoId} no existe.");
 
         var error = await ValidateRelationsAsync(activo.UbicacionId, activo.ProveedorId);
 
         if (error is not null)
-            return Resultado<ActivoDetalleDto>.Fallo(400, "Solicitud incorrecta", error);
+            throw new ExcepcionSolicitudInvalida(error);
 
         // Regla de negocio: el número de serie no se puede repetir
         if (!string.IsNullOrWhiteSpace(activo.NumeroSerie)
             && await _repositorio.ExistePorNumeroSerieAsync(activo.NumeroSerie))
-            return Resultado<ActivoDetalleDto>.Fallo(409, "Conflicto",
-                $"Ya existe un activo con el número de serie {activo.NumeroSerie}.");
+            throw new ExcepcionConflicto($"Ya existe un activo con el número de serie {activo.NumeroSerie}.");
 
         var entidad = _mapeador.Map<Activo>(activo);
         entidad.CodigoActivo = await GenerateAssetCodeAsync(codePrefix);
@@ -106,7 +106,7 @@ public class ActivoService : IActivoService
         // Se vuelve a consultar para incluir los nombres de categoría, ubicación y proveedor
         var created = await _repositorio.ObtenerPorIdentificadorAsync(entidad.Identificador);
 
-        var datos = _mapeador.Map<ActivoDetalleDto>(created!);
+        var datos = await MapearDetalleAsync(created!);
 
         var resultado = Resultado<ActivoDetalleDto>.Exito(datos, 201, "Created", "Registro guardado.");
 
@@ -120,29 +120,23 @@ public class ActivoService : IActivoService
         var entidad = await _repositorio.ObtenerParaActualizarAsync(id);
 
         if (entidad is null)
-            return Resultado<ActivoDetalleDto>.Fallo(404, "No encontrado", $"El activo {id} no existe.");
-
-        if (entidad.Estado == EstadoBaja)
-            return Resultado<ActivoDetalleDto>.Fallo(409, "Conflicto",
-                $"El activo {id} está dado de baja y no se puede editar.");
+            throw new ExcepcionNoEncontrado($"El activo {id} no existe o está dado de baja.");
 
         if (await _repositorio.ObtenerPrefijoCodigoCategoriaAsync(activo.CategoriaActivoId) is null)
-            return Resultado<ActivoDetalleDto>.Fallo(400, "Solicitud incorrecta", $"La categoría {activo.CategoriaActivoId} no existe.");
+            throw new ExcepcionSolicitudInvalida($"La categoría {activo.CategoriaActivoId} no existe.");
 
         var error = await ValidateRelationsAsync(activo.UbicacionId, activo.ProveedorId);
 
         if (error is not null)
-            return Resultado<ActivoDetalleDto>.Fallo(400, "Solicitud incorrecta", error);
+            throw new ExcepcionSolicitudInvalida(error);
 
         // Evita violar la restricción CK_Assets_UsageHours de la base de datos
         if (activo.HorasUso < entidad.HorasUsoAlUltimoMantenimiento)
-            return Resultado<ActivoDetalleDto>.Fallo(400, "Solicitud incorrecta",
-                $"Las horas de uso no pueden ser menores que las registradas en el último mantenimiento ({entidad.HorasUsoAlUltimoMantenimiento}).");
+            throw new ExcepcionSolicitudInvalida($"Las horas de uso no pueden ser menores que las registradas en el último mantenimiento ({entidad.HorasUsoAlUltimoMantenimiento}).");
 
         if (!string.IsNullOrWhiteSpace(activo.NumeroSerie)
             && await _repositorio.ExistePorNumeroSerieAsync(activo.NumeroSerie, id))
-            return Resultado<ActivoDetalleDto>.Fallo(409, "Conflicto",
-                $"Ya existe un activo con el número de serie {activo.NumeroSerie}.");
+            throw new ExcepcionConflicto($"Ya existe un activo con el número de serie {activo.NumeroSerie}.");
 
         _mapeador.Map(activo, entidad);
 
@@ -150,7 +144,7 @@ public class ActivoService : IActivoService
 
         var updated = await _repositorio.ObtenerPorIdentificadorAsync(id);
 
-        var datos = _mapeador.Map<ActivoDetalleDto>(updated!);
+        var datos = await MapearDetalleAsync(updated!);
 
         var resultado = Resultado<ActivoDetalleDto>.Exito(datos, 200, "Correcto", "Registro actualizado.");
 
@@ -162,11 +156,13 @@ public class ActivoService : IActivoService
         var entidad = await _repositorio.ObtenerParaActualizarAsync(id);
 
         if (entidad is null)
-            return Resultado<ActivoDetalleDto>.Fallo(404, "No encontrado", $"El activo {id} no existe.");
+            throw new ExcepcionNoEncontrado($"El activo {id} no existe o está dado de baja.");
 
-        if (entidad.Estado == EstadoBaja)
-            return Resultado<ActivoDetalleDto>.Fallo(409, "Conflicto",
-                $"El activo {id} está dado de baja y no se puede cambiar de estado.");
+        // Regla de negocio: mientras haya una orden abierta, el estado del activo lo controla la orden.
+        // Cubre el paso a OutOfService y a Decommissioned (misma regla que DELETE).
+        if (entidad.Estado != estado.Estado
+            && await _repositorio.TieneOrdenesAbiertasAsync(id, EstadosOrdenCerrada))
+            throw new ExcepcionConflicto($"El activo {id} tiene una orden de mantenimiento abierta y no se puede cambiar a {estado.Estado}.");
 
         entidad.Estado = estado.Estado!;
 
@@ -174,7 +170,7 @@ public class ActivoService : IActivoService
 
         var updated = await _repositorio.ObtenerPorIdentificadorAsync(id);
 
-        var datos = _mapeador.Map<ActivoDetalleDto>(updated!);
+        var datos = await MapearDetalleAsync(updated!);
 
         var resultado = Resultado<ActivoDetalleDto>.Exito(datos, 200, "Correcto", "Estado actualizado.");
 
@@ -189,15 +185,13 @@ public class ActivoService : IActivoService
         var entidad = await _repositorio.ObtenerParaActualizarAsync(id);
 
         if (entidad is null)
-            return Resultado<int>.Fallo(404, "No encontrado", $"El activo {id} no existe.");
+            throw new ExcepcionNoEncontrado($"El activo {id} no existe o está dado de baja.");
 
-        if (entidad.Estado == EstadoBaja)
-            return Resultado<int>.Fallo(409, "Conflicto", $"El activo {id} ya está dado de baja.");
-
-        // Regla de negocio: no se da de baja un activo con órdenes sin cerrar
+        // Regla de negocio (enunciado 7.1 y rúbrica C11, C12 y C19): con órdenes asociadas el activo no se
+        // borra físicamente, se da de baja lógica; solo se bloquea (409) si alguna orden sigue abierta.
+        // Es la misma regla que aplica PATCH /status al pasar a Decommissioned.
         if (await _repositorio.TieneOrdenesAbiertasAsync(id, EstadosOrdenCerrada))
-            return Resultado<int>.Fallo(409, "Conflicto",
-                $"El activo {id} tiene órdenes de mantenimiento sin cerrar y no se puede dar de baja.");
+            throw new ExcepcionConflicto($"El activo {id} tiene órdenes de mantenimiento sin cerrar y no se puede dar de baja.");
 
         entidad.Estado = EstadoBaja;
 
@@ -216,23 +210,18 @@ public class ActivoService : IActivoService
         var entidad = await _repositorio.ObtenerParaActualizarAsync(id);
 
         if (entidad is null)
-            return Resultado<string>.Fallo(404, "No encontrado", $"El activo {id} no existe.");
-
-        if (entidad.Estado == EstadoBaja)
-            return Resultado<string>.Fallo(409, "Conflicto",
-                $"El activo {id} está dado de baja y no se puede cambiar su imagen.");
+            throw new ExcepcionNoEncontrado($"El activo {id} no existe o está dado de baja.");
 
         if (length == 0)
-            return Resultado<string>.Fallo(400, "Solicitud incorrecta", "El archivo está vacío.");
+            throw new ExcepcionSolicitudInvalida("El archivo está vacío.");
 
         if (length > TamanoMaximoImagen)
-            return Resultado<string>.Fallo(400, "Solicitud incorrecta", "La imagen no puede superar 2 MB.");
+            throw new ExcepcionSolicitudInvalida("La imagen no puede superar 2 MB.");
 
         var extension = Path.GetExtension(nombreArchivo).ToLowerInvariant();
 
         if (!ExtensionesImagenPermitidas.Contains(extension))
-            return Resultado<string>.Fallo(400, "Solicitud incorrecta",
-                $"La imagen debe tener una de estas extensiones: {string.Join(", ", ExtensionesImagenPermitidas)}.");
+            throw new ExcepcionSolicitudInvalida($"La imagen debe tener una de estas extensiones: {string.Join(", ", ExtensionesImagenPermitidas)}.");
 
         // El nombre lo genera el servidor: evita colisiones y no usa el nombre que envía el cliente
         var newFileName = $"{Guid.NewGuid()}{extension}";
@@ -265,14 +254,10 @@ public class ActivoService : IActivoService
         var entidad = await _repositorio.ObtenerParaActualizarAsync(id);
 
         if (entidad is null)
-            return Resultado<int>.Fallo(404, "No encontrado", $"El activo {id} no existe.");
-
-        if (entidad.Estado == EstadoBaja)
-            return Resultado<int>.Fallo(409, "Conflicto",
-                $"El activo {id} está dado de baja y no se puede cambiar su imagen.");
+            throw new ExcepcionNoEncontrado($"El activo {id} no existe o está dado de baja.");
 
         if (string.IsNullOrWhiteSpace(entidad.Imagen))
-            return Resultado<int>.Fallo(404, "No encontrado", $"El activo {id} no tiene imagen.");
+            throw new ExcepcionNoEncontrado($"El activo {id} no tiene imagen.");
 
         var oldFileName = entidad.Imagen;
 
@@ -286,6 +271,28 @@ public class ActivoService : IActivoService
         var resultado = Resultado<int>.Exito(id, 200, "Correcto", "Imagen eliminada.");
 
         return resultado;
+    }
+
+    // Mapea el listado y completa la cantidad de órdenes con un solo conteo agrupado en SQL
+    private async Task<IEnumerable<ActivoListaDto>> MapearListaConConteoAsync(IEnumerable<Activo> activos)
+    {
+        var datos = _mapeador.Map<List<ActivoListaDto>>(activos);
+        var conteos = await _repositorio.ContarOrdenesPorActivoAsync(datos.Select(a => a.Identificador));
+
+        foreach (var activo in datos)
+            activo.CantidadOrdenes = conteos.GetValueOrDefault(activo.Identificador);
+
+        return datos;
+    }
+
+    private async Task<ActivoDetalleDto> MapearDetalleAsync(Activo activo)
+    {
+        var datos = _mapeador.Map<ActivoDetalleDto>(activo);
+        var conteos = await _repositorio.ContarOrdenesPorActivoAsync([activo.Identificador]);
+
+        datos.CantidadOrdenes = conteos.GetValueOrDefault(activo.Identificador);
+
+        return datos;
     }
 
     // La ubicación debe existir y el proveedor también, si se indica. Devuelve null si no hay error.

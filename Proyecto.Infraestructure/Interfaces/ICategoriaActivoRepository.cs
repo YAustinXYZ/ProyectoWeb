@@ -9,6 +9,7 @@ public interface ICategoriaActivoRepository
     Task<IEnumerable<CategoriaActivo>> ObtenerPaginacionAsync(int paginaNumero, int tamanoPagina);
     Task<int> ContarAsync();
     Task<CategoriaActivo?> ObtenerPorIdentificadorAsync(int id);
+    Task<Dictionary<int, int>> ContarActivosPorCategoriaAsync(IEnumerable<int> idsCategorias);
 
     // Verificaciones para las reglas de negocio
     Task<bool> ExisteAsync(int id);

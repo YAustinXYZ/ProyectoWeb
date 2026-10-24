@@ -57,6 +57,7 @@ public class OrdenMantenimientoRepository : IOrdenMantenimientoRepository
         var resultado = await _contexto.OrdenesMantenimiento
             .AsNoTracking()
             .Include(o => o.Activo)
+                .ThenInclude(a => a.Categoria)               // El detalle muestra la categoría del activo
             .Include(o => o.TipoMantenimiento)
             .Include(o => o.Proveedor)
             .FirstOrDefaultAsync(o => o.Identificador == id);
